@@ -8,7 +8,7 @@
 // @grant            GM_addStyle
 // ==/UserScript==
 
-const API_KEY = "gVu5aIYvQgSEhaSM";
+const API_KEY = "";
 
 async function sleep(ms)
 {
