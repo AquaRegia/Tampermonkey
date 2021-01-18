@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name             Torn City Finds
 // @namespace        
-// @version          0.5
+// @version          0.51
 // @description
 // @author           AquaRegia
 // @match            https://www.torn.com/city.php*
@@ -120,10 +120,10 @@ async function calculateTotalItemValue(items, element)
                          amount: 1
                         }));
 
-                    /*data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster", amount: 1});
+                    data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster", amount: 1});
                     data.push({id: "532", time: stringifyDate(new Date(Date.now())), name: "Can of Red Cow", amount: 1});
                     data.push({id: "553", time: stringifyDate(new Date(Date.now())), name: "Can of Santa Shooters", amount: 1});
-                    data.push({id: "555", time: stringifyDate(new Date(Date.now())), name: "Can of X-MASS", amount: 12345});*/
+                    data.push({id: "555", time: stringifyDate(new Date(Date.now())), name: "Can of X-MASS", amount: 12345});
 
                     data = Object.values(data.reduce(function(a, b)
                     {
@@ -195,16 +195,8 @@ async function calculateTotalItemValue(items, element)
                             }
                         }
                     }(data));
-                }
-            });
-        }
 
-        return result;
-    };
-
-})(XMLHttpRequest.prototype.open);
-
-GM_addStyle(`
+                    GM_addStyle(`
 
 #cityFindTable, #cityFindTable *
 {
@@ -252,7 +244,7 @@ GM_addStyle(`
 #cityFindTable tbody
 {
     display: block;
-    max-height: 100px;
+    max-height: ${(document.querySelector("#cityFindTable tbody tr").clientHeight * 7)+7}px;
     overflow-y: scroll;
     overflow-x: hidden;
 }
@@ -263,3 +255,12 @@ GM_addStyle(`
 }
 
 `);
+
+                }
+            });
+        }
+
+        return result;
+    };
+
+})(XMLHttpRequest.prototype.open);
