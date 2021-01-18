@@ -8,7 +8,7 @@
 // @grant            GM_addStyle
 // ==/UserScript==
 
-const API_KEY = "";
+const API_KEY = "gVu5aIYvQgSEhaSM";
 
 async function sleep(ms)
 {
@@ -120,10 +120,10 @@ async function calculateTotalItemValue(items, element)
                          amount: 1
                         }));
 
-                    data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster", amount: 1});
+                    /*data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster", amount: 1});
                     data.push({id: "532", time: stringifyDate(new Date(Date.now())), name: "Can of Red Cow", amount: 1});
                     data.push({id: "553", time: stringifyDate(new Date(Date.now())), name: "Can of Santa Shooters", amount: 1});
-                    data.push({id: "555", time: stringifyDate(new Date(Date.now())), name: "Can of X-MASS", amount: 12345});
+                    data.push({id: "555", time: stringifyDate(new Date(Date.now())), name: "Can of X-MASS", amount: 12345});*/
 
                     data = Object.values(data.reduce(function(a, b)
                     {
