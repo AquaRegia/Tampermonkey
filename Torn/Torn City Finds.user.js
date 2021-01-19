@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name             Torn City Finds
-// @namespace        
-// @version          0.51
+// @name             Torn City Finds 2
+// @namespace
+// @version          0.6
 // @description
 // @author           AquaRegia
 // @match            https://www.torn.com/city.php*
@@ -28,14 +28,38 @@ function resizeTable()
 
         document.querySelectorAll(`#cityFindTable td:nth-child(${i}), #cityFindTable th:nth-child(${i})`).forEach(e =>
         {
-            e.style.width = "0";
-            max = e.offsetWidth > max ? e.offsetWidth : max;
+            if(!e.hasAttribute("colspan"))
+            {
+                let currentWidth = getComputedStyle(e).width.replace(/[^0-9]/g, "");
+                max = currentWidth > max ? currentWidth : max;
+            }
         });
 
         document.querySelectorAll(`#cityFindTable td:nth-child(${i}), #cityFindTable th:nth-child(${i})`).forEach(e =>
         {
-            e.style.width = max + "px";
+            if(!e.hasAttribute("colspan"))
+            {
+                e.style.width = max + "px";
+            }
         });
+    }
+}
+
+function memoize(f)
+{
+    let cache = {};
+
+    return function()
+    {
+        if(cache.hasOwnProperty(arguments[0]))
+        {
+            return cache[arguments[0]];
+        }
+
+        let result = f(arguments[0]);
+        cache[arguments[0]] = result;
+
+        return result;
     }
 }
 
@@ -66,31 +90,38 @@ async function getAverageItemCost(id)
         }
     }
 
-    return parseInt(sum/quantity);
-}
+    let result = parseInt(sum/quantity);
 
-async function calculateTotalItemValue(items, element)
+    return result;
+}
+getAverageItemCost = memoize(getAverageItemCost);
+
+async function calculateTotalItemValue(dataByDate, element)
 {
     element.innerHTML = "Loading...";
 
     var sum = 0;
     var promises = [];
 
-    for(let item of items)
+    for(let [date, entry] of Object.entries(dataByDate).sort((a, b) => a[0] > b[0] ? -1 : 1))
     {
-        promises.push(getAverageItemCost(item.id).then(function(value)
+        for(let item of Object.values(entry))
         {
-            document.querySelector("#cityFind-" + item.id).innerHTML = "$" + (value*item.amount).toLocaleString();
-            document.querySelector("#cityFind-" + item.id).style.textAlign = "right";
-            resizeTable();
-            return value*item.amount;
-        }));
+            promises.push(getAverageItemCost(item.id).then(function(value)
+            {
+                let element = document.querySelector(`.cityFindDate-${date}.cityFindItem-${item.id}`);
 
-        parent.innerHTML = Math.max(0, (((promises.length-3) / (items.length-3))*100)).toFixed(0) + "%";
+                element.innerHTML = "$" + (value*item.amount).toLocaleString();
+                element.style.textAlign = "right";
 
-        if(promises.length >= 10)
-        {
-            await sleep(2000);
+                resizeTable();
+                return value*item.amount;
+            }));
+
+            if(promises.length >= 10)
+            {
+                await sleep(2000);
+            }
         }
     }
 
@@ -116,29 +147,36 @@ async function calculateTotalItemValue(items, element)
                     data = data.map(e => (
                         {id: String(parseInt(e.d, 36)),
                          time: stringifyDate(new Date(parseInt(e.ts, 36)*1000)),
-                         name: e.title,
-                         amount: 1
+                         name: e.title
                         }));
 
-                    /*data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster", amount: 1});
-                    data.push({id: "532", time: stringifyDate(new Date(Date.now())), name: "Can of Red Cow", amount: 1});
-                    data.push({id: "553", time: stringifyDate(new Date(Date.now())), name: "Can of Santa Shooters", amount: 1});
-                    data.push({id: "555", time: stringifyDate(new Date(Date.now())), name: "Can of X-MASS", amount: 12345});*/
+                    /*data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster"});
+                    data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster"});
+                    data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster"});
+                    data.push({id: "530", time: stringifyDate(new Date(Date.now()-10000000000)), name: "Can of Munster"});*/
 
-                    data = Object.values(data.reduce(function(a, b)
+                    var dataByDate = {totalAmount: data.length};
+
+                    for(let item of data)
                     {
-                        if(Object.keys(a).includes(b.id))
+                        let date = item.time.split(" ")[0];
+
+                        if(!dataByDate.hasOwnProperty(date))
                         {
-                            a[b.id].amount++;
-                            a[b.id].time = stringifyDate(new Date(parseInt(b.ts, 36)*1000));
+                            dataByDate[date] = {};
+                        }
+
+                        if(dataByDate[date].hasOwnProperty(item.id))
+                        {
+                            dataByDate[date][item.id].amount++;
                         }
                         else
                         {
-                            a[b.id] = b;
+                            dataByDate[date][item.id] = {id: item.id, name: item.name, amount: 1};
                         }
+                    }
 
-                        return a;
-                    }, {}));
+                    console.log(dataByDate);
 
                     var div = document.createElement("div");
 
@@ -148,21 +186,25 @@ async function calculateTotalItemValue(items, element)
 <table id="cityFindTable">
 <thead>
 <tr>
-<th>Item</th>
+<th>Date / Item</th>
 <th>Amount</th>
 <th>Value</th>
 </tr>
 </thead>
 <tbody>`;
-                    for(let item of data.sort((a, b) => a.time > b.time ? -1 : 1))
+
+                    for(let [date, entry] of Object.entries(dataByDate).sort((a, b) => a[0] > b[0] ? -1 : 1))
                     {
-                        html += `
-<tr>
-<td>${item.name}</td>
-<td style="text-align: center">${item.amount}</td>
-<td id="cityFind-${item.id}" style="text-align: center">Unknown</td>
-</tr>
-`;
+                        if(date == "totalAmount"){continue;}
+
+                        html += `<tr>`;
+                        html += `<td colspan="3" style="text-align: center; background-color: #CCC">${date}</td>`;
+                        html += `</tr>`;
+
+                        for(let item of Object.values(entry))
+                        {
+                            html += `<tr style="background-color: #DDD"><td>${item.name}</td><td style="text-align: center">${item.amount}</td><td class="cityFindItem-${item.id} cityFindDate-${date}">Unknown</td></tr>`;
+                        }
                     }
 
                     html += `
@@ -181,20 +223,17 @@ async function calculateTotalItemValue(items, element)
                     div.innerHTML += html;
 
                     document.querySelector("h4").after(div);
-                    document.querySelector("#cityFind-total").innerHTML = data.reduce((a, b) => a + b.amount, 0);
+                    document.querySelector("#cityFind-total").innerHTML = dataByDate.totalAmount;
 
                     resizeTable();
 
-                    document.querySelector("#cityFind-sum").addEventListener("click", function(data)
+                    document.querySelector("#cityFind-sum").addEventListener("click", function()
                     {
-                        return function()
+                        if(this.innerHTML == "Calculate!")
                         {
-                            if(document.querySelector("#cityFind-sum").innerHTML == "Calculate!")
-                            {
-                                calculateTotalItemValue(data, this);
-                            }
+                            calculateTotalItemValue(dataByDate, this);
                         }
-                    }(data));
+                    });
 
                     GM_addStyle(`
 
@@ -228,7 +267,7 @@ async function calculateTotalItemValue(items, element)
 
 #cityFindTable thead, #cityFindTable tfoot, #cityFindTable tr
 {
-    display: table;
+    display: table-row;
 }
 
 #cityFindTable th
@@ -236,15 +275,10 @@ async function calculateTotalItemValue(items, element)
     background: #eee;
 }
 
-#cityFindTable td
-{
-    background: #ddd;
-}
-
 #cityFindTable tbody
 {
     display: block;
-    max-height: ${(document.querySelector("#cityFindTable tbody tr").clientHeight * 7)+7}px;
+    max-height: ${(document.querySelector("#cityFindTable tbody tr").clientHeight * 14)+14}px;
     overflow-y: scroll;
     overflow-x: hidden;
 }
