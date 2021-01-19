@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name             Torn City Finds 2
+// @name             Torn City Finds
 // @namespace
 // @version          0.6
 // @description
