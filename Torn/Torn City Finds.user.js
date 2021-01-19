@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name             Torn City Finds
 // @namespace
-// @version          0.62
+// @version          0.63
 // @description
 // @author           AquaRegia
 // @match            https://www.torn.com/city.php*
@@ -100,13 +100,18 @@ async function calculateTotalItemValue(dataByDate, sumElement)
 {
     sumElement.innerHTML = "Loading...";
 
-    var sum = 0;
-    var promises = [];
+    var total = 0;
+    var requests = 0;
 
     document.querySelectorAll("#cityFindTable td:nth-child(3)").forEach(e => (e.innerHTML = "Queued"));
+    document.querySelectorAll("#cityFindTable td:nth-child(3)[class*='Total']").forEach(e => (e.innerHTML = "Loading..."));
 
     for(let [date, entry] of Object.entries(dataByDate).sort((a, b) => a[0] > b[0] ? -1 : 1))
     {
+        if(date == "totalAmount"){continue;}
+
+        let promises = [];
+
         for(let item of Object.values(entry))
         {
             let element = document.querySelector(`.cityFindDate-${date}.cityFindItem-${item.id}`);
@@ -120,16 +125,23 @@ async function calculateTotalItemValue(dataByDate, sumElement)
                 return value*item.amount;
             }));
 
+            requests++;
+
             element.innerHTML = "Loading...";
 
-            if(promises.length >= 10)
+            if(requests >= 10)
             {
                 await sleep(2000);
             }
         }
+
+        let subTotal = ((await Promise.all(promises)).reduce((a, b) => a+b, 0));
+        total += subTotal;
+
+        document.querySelector(`.cityFindDateTotal-${date}`).innerHTML = "$" + subTotal.toLocaleString();
     }
 
-    sumElement.innerHTML = "$" + ((await Promise.all(promises)).reduce((a, b) => a+b, 0)).toLocaleString();
+    sumElement.innerHTML = "$" + total.toLocaleString();
     sumElement.style.textAlign = "right";
     sumElement.style.textDecoration = "none";
     sumElement.style.cursor = "auto";
@@ -207,6 +219,8 @@ async function calculateTotalItemValue(dataByDate, sumElement)
                         {
                             html += `<tr style="background-color: #DDD"><td>${item.name}</td><td style="text-align: center">${item.amount}</td><td class="cityFindItem-${item.id} cityFindDate-${date}">Unknown</td></tr>`;
                         }
+
+                        html += `<tr style="background-color: #EEE"><td style="text-align: center">Subtotal:</td><td style="text-align: center">${Object.values(entry).reduce((a, b) => a + b.amount, 0)}</td><td class="cityFindDateTotal-${date}">Unknown</td></tr>`;
                     }
 
                     html += `
@@ -280,7 +294,7 @@ async function calculateTotalItemValue(dataByDate, sumElement)
 #cityFindTable tbody
 {
     display: block;
-    max-height: 114px;
+    max-height: 137px;
     overflow-y: scroll;
     overflow-x: hidden;
 }
