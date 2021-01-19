@@ -312,7 +312,7 @@ async function calculateTotalItemValue(dataByDate, sumElement)
 #cityFindTable tbody
 {
     display: block;
-    max-height: 137px;
+    max-height: 183px;
     overflow-y: scroll;
     overflow-x: hidden;
 }
