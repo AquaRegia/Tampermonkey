@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name             Torn City Finds
 // @namespace
-// @version          0.61
+// @version          0.62
 // @description
 // @author           AquaRegia
 // @match            https://www.torn.com/city.php*
@@ -154,9 +154,7 @@ async function calculateTotalItemValue(dataByDate, sumElement)
                          name: e.title
                         }));
 
-                    /*data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster"});
-                    data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster"});
-                    data.push({id: "530", time: stringifyDate(new Date(Date.now())), name: "Can of Munster"});
+                    /*data.push({id: "530", time: stringifyDate(new Date(Date.now()-10000000000)), name: "Can of Munster"});
                     data.push({id: "530", time: stringifyDate(new Date(Date.now()-10000000000)), name: "Can of Munster"});*/
 
                     var dataByDate = {totalAmount: data.length};
@@ -233,7 +231,7 @@ async function calculateTotalItemValue(dataByDate, sumElement)
 
                     document.querySelector("#cityFind-sum").addEventListener("click", function()
                     {
-                        if(this.innerHTML == "Calculate!")
+                        if(this.innerHTML == "Calculate!" && API_KEY.length > 0)
                         {
                             calculateTotalItemValue(dataByDate, this);
                         }
