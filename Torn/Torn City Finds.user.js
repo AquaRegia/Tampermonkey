@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name             Torn City Finds
 // @namespace
-// @version          0.63
+// @version          0.64
 // @description
 // @author           AquaRegia
 // @match            https://www.torn.com/city.php*
@@ -22,6 +22,14 @@ function stringifyDate(date)
 
 function resizeTable()
 {
+    var toggled = false;
+
+    if(document.querySelector("#cityFindTable tbody").classList.contains("hidden"))
+    {
+        document.querySelector("#cityFindTable tbody").classList.toggle("hidden");
+        toggled = true;
+    }
+
     for(let i = 1; i < 4; i++)
     {
         let max = 0;
@@ -42,6 +50,11 @@ function resizeTable()
                 e.style.width = max + "px";
             }
         });
+    }
+
+    if(toggled)
+    {
+        document.querySelector("#cityFindTable tbody").classList.toggle("hidden");
     }
 }
 
@@ -205,7 +218,7 @@ async function calculateTotalItemValue(dataByDate, sumElement)
 <th>Value</th>
 </tr>
 </thead>
-<tbody>`;
+<tbody class="hidden">`;
 
                     for(let [date, entry] of Object.entries(dataByDate).sort((a, b) => a[0] > b[0] ? -1 : 1))
                     {
@@ -249,6 +262,11 @@ async function calculateTotalItemValue(dataByDate, sumElement)
                         {
                             calculateTotalItemValue(dataByDate, this);
                         }
+                    });
+
+                    document.querySelector("#cityFindTable thead").addEventListener("click", function()
+                    {
+                        document.querySelector("#cityFindTable tbody").classList.toggle("hidden");
                     });
 
                     GM_addStyle(`
@@ -302,6 +320,16 @@ async function calculateTotalItemValue(dataByDate, sumElement)
 #cityFindTable th, #cityFindTable td
 {
     padding: 5px;
+}
+
+#cityFindTable thead
+{
+    cursor: pointer;
+}
+
+#cityFindTable .hidden
+{
+    display: none;
 }
 
 `);
