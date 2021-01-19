@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name             Torn City Finds
 // @namespace
-// @version          0.6
+// @version          0.61
 // @description
 // @author           AquaRegia
 // @match            https://www.torn.com/city.php*
@@ -96,27 +96,31 @@ async function getAverageItemCost(id)
 }
 getAverageItemCost = memoize(getAverageItemCost);
 
-async function calculateTotalItemValue(dataByDate, element)
+async function calculateTotalItemValue(dataByDate, sumElement)
 {
-    element.innerHTML = "Loading...";
+    sumElement.innerHTML = "Loading...";
 
     var sum = 0;
     var promises = [];
+
+    document.querySelectorAll("#cityFindTable td:nth-child(3)").forEach(e => (e.innerHTML = "Queued"));
 
     for(let [date, entry] of Object.entries(dataByDate).sort((a, b) => a[0] > b[0] ? -1 : 1))
     {
         for(let item of Object.values(entry))
         {
+            let element = document.querySelector(`.cityFindDate-${date}.cityFindItem-${item.id}`);
+
             promises.push(getAverageItemCost(item.id).then(function(value)
             {
-                let element = document.querySelector(`.cityFindDate-${date}.cityFindItem-${item.id}`);
-
                 element.innerHTML = "$" + (value*item.amount).toLocaleString();
                 element.style.textAlign = "right";
 
                 resizeTable();
                 return value*item.amount;
             }));
+
+            element.innerHTML = "Loading...";
 
             if(promises.length >= 10)
             {
@@ -125,10 +129,10 @@ async function calculateTotalItemValue(dataByDate, element)
         }
     }
 
-    element.innerHTML = "$" + ((await Promise.all(promises)).reduce((a, b) => a+b, 0)).toLocaleString();
-    element.style.textAlign = "right";
-    element.style.textDecoration = "none";
-    element.style.cursor = "auto";
+    sumElement.innerHTML = "$" + ((await Promise.all(promises)).reduce((a, b) => a+b, 0)).toLocaleString();
+    sumElement.style.textAlign = "right";
+    sumElement.style.textDecoration = "none";
+    sumElement.style.cursor = "auto";
 }
 
 (function(open) {
@@ -186,7 +190,7 @@ async function calculateTotalItemValue(dataByDate, element)
 <table id="cityFindTable">
 <thead>
 <tr>
-<th>Date / Item</th>
+<th>Item</th>
 <th>Amount</th>
 <th>Value</th>
 </tr>
@@ -278,7 +282,7 @@ async function calculateTotalItemValue(dataByDate, element)
 #cityFindTable tbody
 {
     display: block;
-    max-height: ${(document.querySelector("#cityFindTable tbody tr").clientHeight * 14)+14}px;
+    max-height: 114px;
     overflow-y: scroll;
     overflow-x: hidden;
 }
