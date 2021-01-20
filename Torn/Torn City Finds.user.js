@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name             Torn City Finds
 // @namespace
-// @version          0.64
+// @version          0.65
 // @description
 // @author           AquaRegia
 // @match            https://www.torn.com/city.php*
@@ -151,7 +151,10 @@ async function calculateTotalItemValue(dataByDate, sumElement)
         let subTotal = ((await Promise.all(promises)).reduce((a, b) => a+b, 0));
         total += subTotal;
 
-        document.querySelector(`.cityFindDateTotal-${date}`).innerHTML = "$" + subTotal.toLocaleString();
+        let subTotalElement = document.querySelector(`.cityFindDateTotal-${date}`);
+
+        subTotalElement.innerHTML = "$" + subTotal.toLocaleString();
+        subTotalElement.style.textAlign = "right";
     }
 
     sumElement.innerHTML = "$" + total.toLocaleString();
