@@ -96,7 +96,7 @@ function sorter(a, b)
                 else
                 {
                     qualityButton.style.color = "red";
-                    qualityButton.title = "You have to scroll to the bottom of the page in order to enable this button";
+                    qualityButton.title = "Scroll to the bottom of the page in order to enable this button";
                 }
             }
 
@@ -153,7 +153,7 @@ function sorter(a, b)
             else
             {
                 newButton.style.color = "red";
-                newButton.title = "You have to scroll to the bottom of the page in order to enable this button";
+                newButton.title = "Scroll to the bottom of the page in order to enable this button";
             }
 
             let spoofClick = false;
