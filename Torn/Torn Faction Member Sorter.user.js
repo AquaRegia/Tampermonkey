@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Faction Member Sorter
 // @namespace    
-// @version      0.1
+// @version      0.11
 // @description  
 // @author       AquaRegia
 // @match        https://www.torn.com/factions.php?step=your*
@@ -10,19 +10,23 @@
 
 function sorter(a, b, partialClassName, reversedOrder)
 {
+    /*if(partialClassName.includes("kick"))
+    {
+        partialClassName = "member";
+    }*/
 
     let x = a.querySelector("div[class*='" + partialClassName + "']");
     let y = b.querySelector("div[class*='" + partialClassName + "']");
 
     if(partialClassName.includes("member"))
     {
-        x = x.firstChild.firstChild.id.split("_")[0];
-        y = y.firstChild.firstChild.id.split("_")[0];
+        x = x.firstChild.lastChild.firstChild.innerHTML.toLowerCase();
+        y = y.firstChild.lastChild.firstChild.innerHTML.toLowerCase();
     }
     else if(partialClassName.includes("position"))
     {
-        x = x.firstChild.innerHTML;
-        y = y.firstChild.innerHTML;
+        x = x.firstChild.innerHTML.toLowerCase();
+        y = y.firstChild.innerHTML.toLowerCase();
     }
 
     else
@@ -51,7 +55,7 @@ function sorter(a, b, partialClassName, reversedOrder)
         if(arguments[0].className && arguments[0].className.toString().includes("membersWrapper___"))
         {
             let rows = arguments[0].querySelectorAll("div[class^='rowWrapper___']");
-            let headers = arguments[0].querySelector("[class*='tableHeader__']").querySelectorAll("[class*='level___'], [class*='days___'], [class*='position___']").forEach(function(e)
+            let headers = arguments[0].querySelector("[class*='tableHeader__']").querySelectorAll("[class*='level___'], [class*='days___'], [class*='position___'], [class*='member___']").forEach(function(e)
             {
                 e.style.cursor = "pointer";
 
