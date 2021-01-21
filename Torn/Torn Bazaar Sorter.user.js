@@ -28,7 +28,7 @@
                 if(qualityButton.dataset.isActive == "1")
                 {
                     let resultList = bazaarItems.list.filter(e => e.name.toLowerCase().includes(searchTerm));
-                    resultList = resultList.sort((a, b) => (qualityButton.dataset.order == "1" ? ((a.quality || 0) > (b.quality || 0)) : ((a.quality || 0) < (b.quality || 0))) ? 1 : -1);
+                    resultList.sort((a, b) => (qualityButton.dataset.order == "1" ? ((a.quality || 0) > (b.quality || 0)) : ((a.quality || 0) < (b.quality || 0))) ? 1 : -1);
 
                     return Promise.resolve(
                         {
