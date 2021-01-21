@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bazaar Sorter
 // @namespace    
-// @version      0.2
+// @version      0.21
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/bazaar.php?*
@@ -87,6 +87,18 @@
 
         if(arguments[0].className && arguments[0].className.toString().includes("searchBar___"))
         {
+            if(Array.from(arguments[0].classList).filter(e => e.includes("tablet")).length > 0)
+            {
+                console.log("is tablet mode, aborting");
+                return;
+            }
+
+            if(Array.from(arguments[0].classList).filter(e => e.includes("mobile")).length > 0)
+            {
+                console.log("is mobile mode, aborting");
+                return;
+            }
+
             let searchBar = arguments[0];
             let oldButton = searchBar.querySelector("button[aria-label*='Category']");
             let newButton = oldButton.cloneNode(true);
@@ -99,8 +111,8 @@
 
             searchBar.addEventListener("click", function(e)
             {
-                if(spoofClick){return};
-                if(bazaarItems.list.length < bazaarItems.total){return};
+                if(spoofClick){return;}
+                if(bazaarItems.list.length < bazaarItems.total){return;}
 
                 let previousActiveElement = Array.from(searchBar.querySelectorAll("button")).filter(e => Array.from(e.classList).join().includes("active"))[0];
                 let activeClass = Array.from(previousActiveElement.classList).filter(e => e.includes("active"))[0];
