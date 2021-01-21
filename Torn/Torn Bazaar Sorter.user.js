@@ -49,8 +49,6 @@
             let result = await original.apply(this, arguments);
             let json = await result.json();
 
-            let items = json.list;
-
             if(bazaarItems.list.length < bazaarItems.total && !json.items)
             {
                 if(json.start == 0)
