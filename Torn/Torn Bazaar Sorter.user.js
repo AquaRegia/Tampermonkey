@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bazaar Sorter
 // @namespace    
-// @version      0.3
+// @version      0.31
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/bazaar.php?*
@@ -88,7 +88,16 @@ function sorter(a, b)
 
             if(qualityButton)
             {
-                qualityButton.style.color = bazaarItems.list.length >= bazaarItems.total ? "green" : "red";
+                if(bazaarItems.list.length >= bazaarItems.total)
+                {
+                    qualityButton.style.color = "green";
+                    qualityButton.title = "";
+                }
+                else
+                {
+                    qualityButton.style.color = "red";
+                    qualityButton.title = "You have to scroll to the bottom of the page in order to enable this button";
+                }
             }
 
             return Promise.resolve(
@@ -136,7 +145,16 @@ function sorter(a, b)
             newButton.ariaLabel = "Search bar button: Quality";
             newButton.innerHTML = "Quality";
             newButton.id = "qualityButton";
-            newButton.style.color = bazaarItems.list.length >= bazaarItems.total ? "green" : "red";
+            if(bazaarItems.list.length >= bazaarItems.total)
+            {
+                newButton.style.color = "green";
+                newButton.title = "";
+            }
+            else
+            {
+                newButton.style.color = "red";
+                newButton.title = "You have to scroll to the bottom of the page in order to enable this button";
+            }
 
             let spoofClick = false;
 
