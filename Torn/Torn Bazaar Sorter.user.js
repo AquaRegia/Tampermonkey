@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bazaar Sorter
 // @namespace    
-// @version      0.1
+// @version      0.2
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/bazaar.php?*
@@ -14,6 +14,38 @@
     {
         if(arguments[0].includes("getBazaarItems"))
         {
+            let qualityButton = document.querySelector("#qualityButton");
+            let searchField = document.querySelector("[class^='input___']");
+            let searchTerm = "";
+
+            if(searchField)
+            {
+                searchTerm = searchField.value.toLowerCase();
+            }
+
+            if(qualityButton)
+            {
+                if(qualityButton.dataset.isActive == "1")
+                {
+                    let resultList = bazaarItems.list.filter(e => e.name.toLowerCase().includes(searchTerm));
+                    resultList = resultList.sort((a, b) => (qualityButton.dataset.order == "1" ? ((a.quality || 0) > (b.quality || 0)) : ((a.quality || 0) < (b.quality || 0))) ? 1 : -1);
+
+                    return Promise.resolve(
+                        {
+                            text: function()
+                            {
+                                return Promise.resolve(JSON.stringify(
+                                    {
+                                        start: bazaarItems.start,
+                                        ID: bazaarItems.ID,
+                                        list: resultList,
+                                        total: resultList.length
+                                    }));
+                            }
+                        });
+                }
+            }
+
             let result = await original.apply(this, arguments);
             let json = await result.json();
 
@@ -31,30 +63,8 @@
                 }
             }
 
-            let qualityButton = document.querySelector("#qualityButton");
-            let searchField = document.querySelector("[class^='input___']");
-            let searchTerm = "";
-
-            if(searchField)
-            {
-                searchTerm = searchField.value.toLowerCase();
-            }
-
             if(qualityButton)
             {
-                if(qualityButton.dataset.isActive == "1")
-                {
-                    let resultList = bazaarItems.list.filter(e => e.name.toLowerCase().includes(searchTerm));
-                    resultList = resultList.sort((a, b) => (qualityButton.dataset.order == "1" ? ((a.quality || 0) > (b.quality || 0)) : ((a.quality || 0) < (b.quality || 0))) ? 1 : -1);
-
-                    json = {
-                                start: bazaarItems.start,
-                                ID: bazaarItems.ID,
-                                list: resultList,
-                                total: resultList.length
-                            };
-                }
-
                 qualityButton.style.color = bazaarItems.list.length >= bazaarItems.total ? "green" : "red";
             }
 
@@ -101,7 +111,7 @@
                 {
                     let buttons = this.querySelectorAll("button");
 
-                    if(e.target.ariaLabel != "Search bar button: Quality")
+                    if(!e.target.ariaLabel.includes("Quality"))
                     {
                         newButton.dataset.isActive = 0;
                         newButton.dataset.order = 0;
@@ -112,11 +122,13 @@
                         newButton.dataset.order = newButton.dataset.order == "1" ? 0 : 1;
 
                         spoofClick = true;
-                        buttons[0].click();
+
                         if(!previousActiveElement.ariaLabel.includes("Default"))
                         {
                             buttons[0].click();
                         }
+
+                        buttons[0].click();
                         spoofClick = false;
                     }
 
