@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Bazaar Sorter
 // @namespace    
-// @version      0.23
+// @version      0.3
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/bazaar.php?*
@@ -52,13 +52,27 @@ function sorter(a, b)
                                         list: resultList,
                                         total: resultList.length
                                     }));
-                            }
+                            },
+                            json: function()
+                            {
+                                return Promise.resolve(
+                                    {
+                                        start: bazaarItems.start,
+                                        ID: bazaarItems.ID,
+                                        list: resultList,
+                                        total: resultList.length
+                                    });
+                            },
+                            url: "https://www.torn.com/bazaar.php",
+                            clone: e => ({json: e => {}})
                         });
                 }
             }
 
             let result = await original.apply(this, arguments);
             let json = await result.json();
+
+            console.log(result);
 
             if(bazaarItems.list.length < bazaarItems.total && !json.items)
             {
@@ -82,7 +96,13 @@ function sorter(a, b)
                     text: function()
                     {
                         return Promise.resolve(JSON.stringify(json));
-                    }
+                    },
+                    json: function()
+                    {
+                        return Promise.resolve(json);
+                    },
+                    url: "https://www.torn.com/bazaar.php",
+                    clone: e => ({json: e => {}})
                 });
         }
 
