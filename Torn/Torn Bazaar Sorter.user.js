@@ -1,12 +1,22 @@
 // ==UserScript==
 // @name         Torn Bazaar Sorter
 // @namespace    
-// @version      0.21
+// @version      0.23
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/bazaar.php?*
 // @grant        none
 // ==/UserScript==
+
+function sorter(a, b)
+{
+    let aq = a.quality || 0;
+    let bq = b.quality || 0;
+
+    let order = document.querySelector("#qualityButton").dataset.order == "1";
+
+    return order ? aq - bq : bq - aq;
+}
 
 (function(original)
 {
@@ -28,7 +38,8 @@
                 if(qualityButton.dataset.isActive == "1")
                 {
                     let resultList = bazaarItems.list.filter(e => e.name.toLowerCase().includes(searchTerm));
-                    resultList.sort((a, b) => (qualityButton.dataset.order == "1" ? ((a.quality || 0) > (b.quality || 0)) : ((a.quality || 0) < (b.quality || 0))) ? 1 : -1);
+
+                    resultList.sort(sorter);
 
                     return Promise.resolve(
                         {
