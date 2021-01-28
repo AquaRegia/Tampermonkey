@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.11
+// @version      1.12
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -81,32 +81,8 @@ class AjaxModule
     constructor()
     {
         this.ajaxListeners = [];
-        //this._forceDarkMode();
         this._overrideXhr();
         this._overrideFetch();
-    }
-    
-    _forceDarkMode()
-    {
-        (function(original)
-        {
-            window.fetch = async function()
-            {
-                let result = original.apply(this, arguments);
-                
-                if(arguments[0].includes("=TopBanner"))
-                {
-                    let response = await result;
-                    let jsonResponse = await response.json();
-                    
-                    jsonResponse.settings.hasAccessToDarkMode = true;
-                    
-                    return new Response(JSON.stringify(jsonResponse));
-                }
-
-                return result;
-            };
-        })(window.fetch);
     }
     
     _overrideXhr()
@@ -184,24 +160,31 @@ class ApiModule
     {
         this.callLog = JSON.parse(localStorage.getItem("AquaTools_ApiModule_callLog") || "[]");
         this.cacheLog = JSON.parse(localStorage.getItem("AquaTools_ApiModule_cache") || "{}");
-        
-        setInterval(this.updateLogs.bind(this), 1000);
     }
     
     async fetch(url, cacheMs = 0)
     {
+        this.loadCacheLog();
+        
         if(this.cacheLog.hasOwnProperty(url) && (this.cacheLog[url].time + cacheMs) >= Date.now())
         {
             return Promise.resolve(this.cacheLog[url].json);
         }
         
-        if(this.callLog.length > this.throttleLimit)
+        this.loadCallLog();
+        
+        if(this.callLog.length > 90)
         {
-            await Utils.sleep(1000);
+            await Utils.sleep(7500);
+        }
+        else if(this.callLog.length > this.throttleLimit)
+        {
+            await Utils.sleep(1500);
         }
         
+        this.loadCallLog();
         this.callLog.push(Date.now());
-        localStorage.setItem("AquaTools_ApiModule_callLog", JSON.stringify(this.callLog));
+        this.saveCallLog();
         
         let response = await fetch(`https://api.torn.com${url}&key=${this.apiKey}`);
 
@@ -209,12 +192,43 @@ class ApiModule
         {
             if(!json.hasOwnProperty("error"))
             {
+                this.loadCacheLog();
                 this.cacheLog[url] = {json: json, time: Date.now()};
-                localStorage.setItem("AquaTools_ApiModule_cache", JSON.stringify(this.cacheLog));
+                this.saveCacheLog();
             }
         });
         
         return response.json();
+    }
+    
+    loadCallLog()
+    {
+        let now = Date.now();
+        this.callLog = JSON.parse(localStorage.getItem("AquaTools_ApiModule_callLog") || "[]").filter(e => (e+60000) >= now);
+    }
+    
+    loadCacheLog()
+    {
+        let now = Date.now();
+        this.cacheLog = JSON.parse(localStorage.getItem("AquaTools_ApiModule_cache") || "{}");
+        
+        Object.entries(this.cacheLog).forEach(([index, item]) => 
+        {
+            if((item.time + 300000) < now)
+            {
+                delete this.cacheLog[index];
+            }
+        });
+    }
+    
+    saveCallLog()
+    {
+        localStorage.setItem("AquaTools_ApiModule_callLog", JSON.stringify(this.callLog));
+    }
+    
+    saveCacheLog()
+    {
+        localStorage.setItem("AquaTools_ApiModule_cache", JSON.stringify(this.cacheLog));
     }
     
     updateLogs()
@@ -516,6 +530,64 @@ class BazaarSorterModule extends BaseModule
                 }
             }
         });
+    }
+}
+
+class ChainTargetsModule extends BaseModule
+{
+    constructor()
+    {
+        super("/blacklist.php?page=ChainTargets");
+        
+        this.addAjaxListener("getSidebarData", false, (json) => 
+        {
+            json.lists.chains = 
+            {
+                added: null, 
+                elements: null, 
+                favorite: null, 
+                icon: "factions", 
+                link: "blacklist.php?page=ChainTargets", 
+                linkOrder: 23, 
+                name: "Chains", 
+                status: null,
+            };
+            
+            if(document.location.href.includes(this.targetUrl))
+            {
+                json.lists.chains.status = "active";
+                json.lists.enemies.status = null;
+            }
+
+            return json;
+        });
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        this.replaceContent("content-wrapper", element =>
+        {
+            this.contentElement = element;
+
+            //this.addStyle();
+            this.addHeader();
+            //this.addBody();
+            //this.addJs();
+        });
+    }
+    
+    addHeader()
+    {
+        this.contentElement.innerHTML = `
+        <div class="content-title m-bottom10">
+            <h4 id="skip-to-content" class="left">Chain Targets</h4>
+
+        <div class="clear"></div>
+        <hr class="page-head-delimiter">
+        </div>
+        `;
     }
 }
 
@@ -1076,7 +1148,7 @@ class SettingsModule extends BaseModule
                 AquaTools: 
                 {
                     iconID: "AquaToolsIcon", 
-                    title: "AquaTools", 
+                    title: "AquaTools " + GM_info.script.version, 
                     subtitle: "Module settings",
                     link: "/index.php?page=AquaTools"
                 }
@@ -1085,6 +1157,11 @@ class SettingsModule extends BaseModule
             Object.entries(json.statusIcons.icons).forEach(([key, value]) => newIcons[key] = value);
             
             json.statusIcons.icons = newIcons;
+            
+            if(document.location.href.includes(this.targetUrl))
+            {
+                json.areas.home.status = null;
+            }
             
             return json;
         });
@@ -1127,6 +1204,7 @@ class SettingsModule extends BaseModule
                 let classRef;
                 
                 if(name == "Bazaar_Sorter"){classRef = BazaarSorterModule}
+                if(name == "Chain_Targets"){classRef = ChainTargetsModule}
                 if(name == "City_Finds"){classRef = CityFindsModule}
                 if(name == "Company_Effectiveness"){classRef = CompanyEffectivenessModule}
                 
@@ -1164,7 +1242,7 @@ class SettingsModule extends BaseModule
                         {
                             value: 50, 
                             valueType: "number", 
-                            description: "How many API requests to allow within 1 minute, before introducing a 1 second delay between requests"
+                            description: "How many API requests to allow within 1 minute, before introducing a 1.5 second delay between requests"
                         }
                     }
                 }, 
@@ -1176,6 +1254,14 @@ class SettingsModule extends BaseModule
                     settingsHidden: true, 
                     settings: {}
                 }, 
+                Chain_Targets:
+                {
+                    isActive: false, 
+                    needsApiKey: true, 
+                    description: "Description of Chain Targets", 
+                    settingsHidden: true,
+                    settings: {}
+                },
                 City_Finds: 
                 {
                     isActive: false, 
@@ -1367,7 +1453,7 @@ class SettingsModule extends BaseModule
     {
         this.contentElement.innerHTML = `
         <div class="content-title m-bottom10">
-            <h4 id="skip-to-content" class="left">AquaTool Settings</h4>
+            <h4 id="skip-to-content" class="left">AquaTool ${GM_info.script.version} Settings</h4>
 
         <div class="clear"></div>
         <hr class="page-head-delimiter">
@@ -1525,3 +1611,4 @@ class SettingsModule extends BaseModule
 }
 
 let settings = new SettingsModule();
+
