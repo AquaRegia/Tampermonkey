@@ -5,6 +5,7 @@
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
+// @updateURL    https://github.com/AquaRegia/Tampermonkey/raw/main/Torn/Torn%20AquaTools.user.js
 // @downloadURL  https://github.com/AquaRegia/Tampermonkey/raw/main/Torn/Torn%20AquaTools.user.js
 // @run-at       document-start
 // @grant        none
