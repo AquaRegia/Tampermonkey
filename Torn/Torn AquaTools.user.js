@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.0
+// @version      1.1
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -15,7 +15,7 @@ let GM_addStyle = function(s)
     let style = document.createElement("style");
     style.type = "text/css";
     style.innerHTML = s;
-
+    
     document.head.appendChild(style);
 }
 
@@ -30,19 +30,19 @@ class Utils
     {
         return new Promise(e => setTimeout(e, ms));
     }
-
+    
     static stringifyTimestamp(timestamp)
     {
         return new Date(timestamp).toISOString().replace("T", " ").replace("Z", "").split(".")[0];
     }
-
+    
     static getWeekOfYear(timestamp)
     {
         let date = new Date(timestamp);
         let startOfYear = new Date(String(date.getUTCFullYear()));
         let startOfFirstWeek;
-
-        if(startOfYear.getUTCDay() < 4)
+        
+        if(startOfYear.getUTCDay() <= 4)
         {
             startOfFirstWeek = startOfYear.valueOf() - (startOfYear.getUTCDay() - 1)*86400000;
         }
@@ -50,7 +50,7 @@ class Utils
         {
             startOfFirstWeek = startOfYear.valueOf() + (8 - startOfYear.getUTCDay())*86400000;
         }
-
+        
         if(date < startOfFirstWeek)
         {
             return 53;
@@ -60,7 +60,7 @@ class Utils
             return Math.ceil(((date - startOfFirstWeek)+1) / 604800000);
         }
     }
-
+    
     static reverseString(s)
     {
         return Array.from(s).reverse().join("");
@@ -76,7 +76,7 @@ class AjaxModule
         this._overrideXhr();
         this._overrideFetch();
     }
-
+    
     _forceDarkMode()
     {
         (function(original)
@@ -84,14 +84,14 @@ class AjaxModule
             window.fetch = async function()
             {
                 let result = original.apply(this, arguments);
-
+                
                 if(arguments[0].includes("=TopBanner"))
                 {
                     let response = await result;
                     let jsonResponse = await response.json();
-
+                    
                     jsonResponse.settings.hasAccessToDarkMode = true;
-
+                    
                     return new Response(JSON.stringify(jsonResponse));
                 }
 
@@ -99,18 +99,18 @@ class AjaxModule
             };
         })(window.fetch);
     }
-
+    
     _overrideXhr()
     {
         let base = this;
-
+        
         (function(original)
         {
             window.XMLHttpRequest.prototype.open = function()
             {
                 let result = original.apply(this, arguments);
                 let url = arguments[1];
-
+                
                 this.addEventListener("readystatechange", function()
                 {
                     if(this.readyState == 4 && this.responseText[0] == "{")
@@ -120,28 +120,28 @@ class AjaxModule
                         base._runAjaxCallbacks(url, false, json);
                     }
                 });
-
+                
                 return result;
             };
         })(window.XMLHttpRequest.prototype.open);
     }
-
+    
     _overrideFetch()
     {
         let base = this;
-
+        
         (function(original)
         {
             window.fetch = async function()
             {
                 let url = arguments[0];
-
+                
                 let preCall = base._runAjaxCallbacks(url, true);
                 if(preCall){return new Response(JSON.stringify(preCall))};
-
+                
                 let result = await original.apply(this, arguments);
                 let json = await result.clone().json();
-
+                
                 let stub = base._runAjaxCallbacks(url, false, json);
 
                 //console.log("Fetch:", url, json);
@@ -149,11 +149,11 @@ class AjaxModule
             };
         })(window.fetch);
     }
-
+    
     _runAjaxCallbacks(url, abortCall, json)
     {
         let stub;
-
+        
         for(let listener of this.ajaxListeners)
         {
             if(url.toLowerCase().includes(listener.url.toLowerCase()))
@@ -164,7 +164,7 @@ class AjaxModule
                 }
             }
         }
-
+        
         return stub;
     }
 }
@@ -176,28 +176,28 @@ class ApiModule
         this.callLog = JSON.parse(localStorage.getItem("AquaTools_ApiModule_callLog") || "[]");
         this.cacheLog = JSON.parse(localStorage.getItem("AquaTools_ApiModule_cache") || "{}");
         this.apiKey = "";
-
+        
         setInterval(this.updateLogs.bind(this), 1000);
     }
-
+    
     async fetch(url, cacheMs = 0)
     {
         if(this.cacheLog.hasOwnProperty(url) && (this.cacheLog[url].time + cacheMs) > Date.now())
         {
             return Promise.resolve(this.cacheLog[url].json);
         }
-
+        
         if(this.callLog.length > 50)
         {
             await Utils.sleep(1000);
         }
-
+        
         this.callLog.push(Date.now());
         localStorage.setItem("AquaTools_ApiModule_callLog", JSON.stringify(this.callLog));
-
+        
         let response = await fetch(`https://api.torn.com${url}&key=${this.apiKey}`);
 
-        response.clone().json().then(json =>
+        response.clone().json().then(json => 
         {
             if(!json.hasOwnProperty("error"))
             {
@@ -205,17 +205,17 @@ class ApiModule
                 localStorage.setItem("AquaTools_ApiModule_cache", JSON.stringify(this.cacheLog));
             }
         });
-
+        
         return response.json();
     }
-
+    
     updateLogs()
     {
         let now = Date.now();
 
         this.callLog = this.callLog.filter(e => (e+60000) >= now);
-
-        Object.entries(this.cacheLog).forEach(([index, item]) =>
+        
+        Object.entries(this.cacheLog).forEach(([index, item]) => 
         {
             if((item.time + 300000) < now)
             {
@@ -223,7 +223,7 @@ class ApiModule
             }
         });
     }
-
+    
     setApiKey(key)
     {
         this.apiKey = key;
@@ -234,19 +234,19 @@ class BaseModule
 {
     static _ajaxModule = new AjaxModule();
     static _apiModule = new ApiModule();
-
+    
     constructor(targetUrl)
     {
         this.targetUrl = targetUrl;
         this.user = {};
-
+        
         this.addAjaxListener("=TopBanner", false, json =>
         {
             this.user = json.user;
             this.onUserLoaded();
         });
     }
-
+    
     ready()
     {
         if(document.location.href.includes(this.targetUrl))
@@ -254,37 +254,37 @@ class BaseModule
             this.init();
         }
     }
-
+    
     setApiKey(key)
     {
         BaseModule._apiModule.setApiKey(key);
     }
-
+    
     isApiKeyValid()
     {
         return BaseModule._apiModule.apiKeyIsValid;
     }
-
+    
     log(...data)
     {
         console.log(this.constructor.name + ":", ...data);
     }
-
+    
     addAjaxListener(url, abortCall, callback)
     {
         BaseModule._ajaxModule.ajaxListeners.push({url: url, abortCall: abortCall, callback: callback});
     }
-
+    
     async api()
     {
         return await BaseModule._apiModule.fetch(...arguments);
     }
-
+    
     onUserLoaded()
     {
-
+        
     }
-
+    
     replaceContent(className, callback)
     {
         let shouldStop = false;
@@ -293,7 +293,7 @@ class BaseModule
         new MutationObserver((mutationsList, observer) =>
         {
             let latestMutation;
-
+            
             for(const mutation of mutationsList)
             {
                 if(mutation.target.className && mutation.target.className.toString().includes(className))
@@ -322,18 +322,18 @@ class BazaarSorterModule extends BaseModule
     constructor()
     {
         super("bazaar.php");
-
+        
         this.bazaarItems = {list: [], total: Number.MAX_VALUE};
-
+        
         this.ready();
     }
-
+    
     init()
     {
         this.overrideAppendChild();
         this.addAjaxListeners();
     }
-
+    
     sorter(a, b)
     {
         let aq = a.quality || 0;
@@ -343,11 +343,11 @@ class BazaarSorterModule extends BaseModule
 
         return order ? aq - bq : bq - aq;
     }
-
+    
     overrideAppendChild()
     {
         let base = this;
-
+        
         (function(original)
         {
             Element.prototype.appendChild = function()
@@ -447,7 +447,7 @@ class BazaarSorterModule extends BaseModule
     addAjaxListeners()
     {
         let base = this;
-
+        
         this.addAjaxListener("getBazaarItems", true, json =>
         {
             let qualityButton = document.querySelector("#qualityButton");
@@ -476,11 +476,11 @@ class BazaarSorterModule extends BaseModule
                 }
             }
         });
-
-        this.addAjaxListener("getBazaarItems", false, json =>
+        
+        this.addAjaxListener("getBazaarItems", false, json => 
         {
             let qualityButton = document.querySelector("#qualityButton");
-
+            
             if(base.bazaarItems.list.length < base.bazaarItems.total && !json.items)
             {
                 if(json.start == 0)
@@ -512,21 +512,22 @@ class BazaarSorterModule extends BaseModule
 
 class CityFindsModule extends BaseModule
 {
-    constructor(startMinimized, itemGrouping, itemOrder, maxRows)
+    constructor(startMinimized, itemGrouping, itemOrder, maxRows, cacheAge)
     {
         super("/city.php");
-
+        
         this.startMinimized = startMinimized == "true";
         this.itemGrouping = itemGrouping;
         this.itemOrder = itemOrder;
         this.maxRows = maxRows;
-
+        this.cacheAge = cacheAge;
+        
         this.ready();
     }
-
+    
     init()
     {
-        this.addAjaxListener("step=mapData", false, json =>
+        this.addAjaxListener("step=mapData", false, json => 
         {
             let data = JSON.parse(atob(json.territoryUserItems));
 
@@ -557,16 +558,16 @@ class CityFindsModule extends BaseModule
                     this.dataByDate[title].items[item.id] = {id: item.id, name: item.name, amount: 1};
                 }
             }
-
+            
             this.addTable();
             this.addStyle();
         });
     }
-
+    
     getGroupTitle(item, index)
     {
         let result = "";
-
+        
         if(this.itemGrouping == "Name")
         {
             result = item.name;
@@ -579,23 +580,23 @@ class CityFindsModule extends BaseModule
         {
             let year = new Date(item.time).getUTCFullYear();
             let week = Utils.getWeekOfYear(item.time);
-
+            
             result = `Week ${week} of ${year - (week == 53 ? 1 : 0)}`;
         }
         else if(this.itemGrouping == "Month")
         {
             let monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
+            
             result = monthNames[new Date(item.time).getUTCMonth()];
         }
         else
         {
             result = `${index}-${item.name}`;
         }
-
+        
         return result.replace(/ /g, "_");
     }
-
+    
     addTable()
     {
         let div = document.createElement("div");
@@ -614,7 +615,7 @@ class CityFindsModule extends BaseModule
         <tbody class="${this.startMinimized ? "hidden" : "" }">`;
 
         let sorter = (a, b) => -1;
-
+        
         if(this.itemGrouping == "None" || this.itemGrouping == "Name")
         {
             if(this.itemOrder == "Time")
@@ -630,7 +631,7 @@ class CityFindsModule extends BaseModule
                 sorter = (a, b) => a[0] == "totalAmount" || b[0] == "totalAmount" ? 0 : (Object.values(Object.values(b[1].items))[0].amount - Object.values(Object.values(a[1].items))[0].amount) - 1;
             }
         }
-
+        
         for(let [title, entry] of Object.entries(this.dataByDate).sort(sorter))
         {
             if(title == "totalAmount"){continue;}
@@ -686,7 +687,7 @@ class CityFindsModule extends BaseModule
             document.querySelector("#cityFindTable tbody").classList.toggle("hidden");
         });
     }
-
+    
     addStyle()
     {
         GM_addStyle(`
@@ -752,7 +753,7 @@ class CityFindsModule extends BaseModule
         }
         `);
     }
-
+    
     resizeTable()
     {
         let toggled = false;
@@ -793,7 +794,7 @@ class CityFindsModule extends BaseModule
 
     async getAverageItemCost(id)
     {
-        let json = await this.api(`/market/${id}?selections=bazaar`, 60000);
+        let json = await this.api(`/market/${id}?selections=bazaar`, this.cacheAge*1000);
 
         let quantity = 0;
         let sum = 0;
@@ -821,7 +822,7 @@ class CityFindsModule extends BaseModule
 
         return result;
     }
-
+    
     async calculateTotalItemValue(sumElement)
     {
         sumElement.innerHTML = "Loading...";
@@ -841,7 +842,7 @@ class CityFindsModule extends BaseModule
             {
                 let element = document.querySelector(`.cityFindTitle-${title}.cityFindItem-${item.id}`);
                 element.innerHTML = "Loading...";
-
+                
                 let value = await this.getAverageItemCost(item.id);
 
                 element.innerHTML = "$" + (value*item.amount).toLocaleString();
@@ -861,13 +862,13 @@ class CityFindsModule extends BaseModule
                 subTotalElement.style.textAlign = "right";
             }
         }
-
+        
         if(this.itemOrder == "Value" && (this.itemGrouping == "None" || this.itemGrouping == "Name"))
         {
-            Array.from(document.querySelectorAll("#cityFindTable tbody tr")).sort((a, b) =>
+            Array.from(document.querySelectorAll("#cityFindTable tbody tr")).sort((a, b) => 
             {
                 return parseInt(b.children[2].innerHTML.replace(/[^0-9]/g, "")) - parseInt(a.children[2].innerHTML.replace(/[^0-9]/g, ""));
-            }).forEach(e =>
+            }).forEach(e => 
             {
                 e.parentNode.appendChild(e);
             });
@@ -882,17 +883,18 @@ class CityFindsModule extends BaseModule
 
 class CompanyEffectivenessModule extends BaseModule
 {
-    constructor(effectivenessLimit, addictionLimit, notificationInterval)
+    constructor(effectivenessLimit, addictionLimit, notificationInterval, cacheAge)
     {
         super("");
-
+        
         this.effectivenessLimit = effectivenessLimit;
         this.addictionLimit = addictionLimit;
         this.notificationInterval = notificationInterval;
-
+        this.cacheAge = cacheAge;
+        
         this.ready();
     }
-
+    
     init()
     {
         GM_addStyle(`
@@ -922,15 +924,15 @@ class CompanyEffectivenessModule extends BaseModule
         }
         `);
     }
-
+    
     async getEffectiveness()
     {
-        let employeeResponse = await this.api(`/company/?selections=employees`, 300000);
-        let profileResponse = await this.api(`/company/?selections=profile`, 300000);
-        let jobPointsResponse = await this.api(`/user/?selections=jobpoints`, 300000);
+        let employeeResponse = await this.api(`/company/?selections=employees`, this.cacheAge*1000);
+        let profileResponse = await this.api(`/company/?selections=profile`, this.cacheAge*1000);
+        let jobPointsResponse = await this.api(`/user/?selections=jobpoints`, this.cacheAge*1000);
 
         let jobPoints = jobPointsResponse.jobpoints.companies[profileResponse.company.company_type].jobpoints;
-
+        
         let myId = this.user.data.userID;
 
         let result = "Job points: " + jobPoints;
@@ -955,7 +957,7 @@ class CompanyEffectivenessModule extends BaseModule
                     result += name.charAt(0).toUpperCase() + name.slice(1) + ": " + this.colorize(value, name=="effectiveness");
                     result += "<br/>";
                 }
-
+                
                 if(((employee.effectiveness.addiction || 0) < this.addictionLimit) || (employee.effectiveness.total || 0) < this.effectivenessLimit)
                 {
                     document.querySelector("#effectivenessWarning").innerHTML = `!`;
@@ -978,7 +980,7 @@ class CompanyEffectivenessModule extends BaseModule
 
         document.querySelector(".effectivenessLink div").innerHTML = result;
     }
-
+    
     colorize(value, isTotal)
     {
         let color = "";
@@ -1016,11 +1018,11 @@ class CompanyEffectivenessModule extends BaseModule
 
         return `<span style="all: unset; color: ${color}; font-weight: 600">${value}</span>`;
     }
-
+    
     onUserLoaded()
     {
-        if(this.user.state.isLoggedIn &&
-        this.user.state.status == "ok" &&
+        if(this.user.state.isLoggedIn && 
+        this.user.state.status == "ok" && 
         !this.user.state.isTravelling &&
         !this.user.state.isAbroad)
         {
@@ -1050,41 +1052,41 @@ class SettingsModule extends BaseModule
     constructor()
     {
         super("/index.php?page=AquaTools");
-
+        
         this.modules = [];
-
+        
         this.svgString = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ff5d22" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>`);
-
+        
         this.addAjaxListener("sidebarData", false, (json) =>
         {
-            let newIcons =
+            let newIcons = 
             {
-                AquaTools:
+                AquaTools: 
                 {
-                    iconID: "AquaToolsIcon",
-                    title: "AquaTools",
+                    iconID: "AquaToolsIcon", 
+                    title: "AquaTools", 
                     subtitle: "Module settings",
                     link: "/index.php?page=AquaTools"
                 }
             };
-
+            
             Object.entries(json.statusIcons.icons).forEach(([key, value]) => newIcons[key] = value);
-
+            
             json.statusIcons.icons = newIcons;
-
+            
             return json;
         });
-
+        
         GM_addStyle(`
         #AquaToolsIcon-sidebar
         {
             background-image: url("data:image/svg+xml;base64,${this.svgString}");
         }
         `);
-
+        
         this.initSettings();
         this.initModules();
-
+        
         this.ready();
     }
 
@@ -1100,21 +1102,21 @@ class SettingsModule extends BaseModule
             this.addJs();
         });
     }
-
+    
     initModules()
     {
         this.setApiKey(this.settings.modules["API"].settings["API_key"].value);
-
+        
         for(let [name, module] of Object.entries(this.settings.modules))
         {
             if(module.isActive && (!module.needsApiKey || this.settings.apiKeyIsValid))
             {
                 let classRef;
-
+                
                 if(name == "Bazaar_Sorter"){classRef = BazaarSorterModule}
                 if(name == "City_Finds"){classRef = CityFindsModule}
                 if(name == "Company_Effectiveness"){classRef = CompanyEffectivenessModule}
-
+                
                 if(classRef)
                 {
                     this.modules.push(new classRef(...Object.values(module.settings).map(e => e.value)));
@@ -1122,100 +1124,112 @@ class SettingsModule extends BaseModule
             }
         }
     }
-
+    
     initSettings()
     {
         this.settings = JSON.parse(localStorage.getItem("AquaTools_settings")) || {};
-
+        
         let settingsTemplate = {
-            apiKeyIsValid: false,
-            modules:
+            apiKeyIsValid: false, 
+            modules: 
             {
                 API:
                 {
-                    isActive: true,
+                    isActive: true, 
                     needsApiKey: false, //ironic, isn't it?
                     description: "Description of API",
-                    settingsHidden: true,
-                    settings:
+                    settingsHidden: true, 
+                    settings: 
                     {
                         API_key:
                         {
-                            value: "",
-                            valueType: "text",
+                            value: "", 
+                            valueType: "text", 
                             description: "Your API key from the Torn settings page"
                         }
                     }
-                },
-                Bazaar_Sorter:
+                }, 
+                Bazaar_Sorter: 
                 {
-                    isActive: false,
-                    needsApiKey: false,
-                    description: "Description of Bazaar Sorter",
-                    settingsHidden: true,
+                    isActive: false, 
+                    needsApiKey: false, 
+                    description: "Description of Bazaar Sorter", 
+                    settingsHidden: true, 
                     settings: {}
-                },
-                City_Finds:
+                }, 
+                City_Finds: 
                 {
-                    isActive: false,
-                    needsApiKey: true,
-                    description: "Description of City Finds",
-                    settingsHidden: true,
+                    isActive: false, 
+                    needsApiKey: true, 
+                    description: "Description of City Finds", 
+                    settingsHidden: true, 
                     settings:
                     {
-                        Start_minimized:
+                        Start_minimized: 
                         {
-                            value: "true",
-                            valueType: "boolean",
+                            value: "true", 
+                            valueType: "boolean", 
                             description: "Item table can be toggled on or off by clicking the header, this chooses the default"
                         },
-                        Item_grouping:
+                        Item_grouping: 
                         {
                             value: "Day",
-                            valueType: "list",
-                            possibleValues: ["None", "Name", "Day", "Week", "Month"],
+                            valueType: "list", 
+                            possibleValues: ["None", "Name", "Day", "Week", "Month"], 
                             description: "How to group the items"
                         },
-                        Item_order:
+                        Item_order: 
                         {
-                            value: "Time",
-                            valueType: "list",
-                            possibleValues: ["Time", "Name", "Amount", "Value"],
+                            value: "Time", 
+                            valueType: "list", 
+                            possibleValues: ["Time", "Name", "Amount", "Value"], 
                             description: "How to sort the items, only works when the item grouping isn't time related"
-                        },
-                        Max_rows:
+                        }, 
+                        Max_rows: 
                         {
-                            value: 8,
+                            value: 8, 
                             valueType: "number",
                             description: "How many rows to show at most in the table (excluding header and footer) when expanded"
+                        }, 
+                        Cache_age:
+                        {
+                            value: 60, 
+                            valueType: "number", 
+                            description: "When fetching the API for item values, it'll use cached values if they're no older than this (in seconds)"
                         }
                     }
-                },
+                }, 
                 Company_Effectiveness:
                 {
-                    isActive: false,
-                    needsApiKey: true,
-                    description: "Description of Company Effectiveness",
-                    settingsHidden: true,
-                    settings:
+                    isActive: false, 
+                    needsApiKey: true, 
+                    description: "Description of Company Effectiveness", 
+                    settingsHidden: true, 
+                    settings: 
                     {
                         Effectiveness_limit:
                         {
-                            value: 100,
-                            valueType: "number",
+                            value: 100, 
+                            valueType: "number", 
                             description: "You will be notified when your total effectiveness is lower than this"
-                        },
+                        }, 
                         Addiction_limit:
                         {
-                            value: -5,
-                            valueType: "number",
+                            value: -5, 
+                            valueType: "number", 
                             description: "You will be notified when your addiction penalty is lower than this"
-                        },
+                        }, 
                         Notification_interval:
                         {
-                            value: 21600,
-                            valueType: "number",
+                            value: 21600, 
+                            valueType: "number", 
                             description: "How often (in seconds) to notify you while you're below either limit"
+                        }, 
+                        Cache_age:
+                        {
+                            value: 300,
+                            valueType: "number", 
+                            description: "When fetching your company information, it'll use cached values if they're no older than this (in seconds)"
                         }
                     }
                 }
@@ -1224,15 +1238,26 @@ class SettingsModule extends BaseModule
 
         this.settings = {...settingsTemplate, ...this.settings};
         this.settings.modules = {...settingsTemplate.modules, ...this.settings.modules};
-
+        
         for(let [name, module] of Object.entries(this.settings.modules))
         {
             module.settings = {...settingsTemplate.modules[name].settings, ...module.settings};
+            
+            module.description = settingsTemplate.modules[name].description;
+            
+            for(let [settingName, setting] of Object.entries(module.settings))
+            {
+                setting.description = settingsTemplate.modules[name].settings[settingName].description;
+                if(setting.hasOwnProperty("possibleValues"))
+                {
+                    setting.possibleValues = settingsTemplate.modules[name].settings[settingName].possibleValues;
+                }
+            }
         }
-
+        
         this.saveSettings();
     }
-
+    
     addStyle()
     {
         GM_addStyle(`
@@ -1246,18 +1271,26 @@ class SettingsModule extends BaseModule
             border-collapse: collapse;
             min-width: 400px;
         }
-
+        
         #SettingsModule th, #SettingsModule td
         {
             border: 1px solid black;
-            padding: 4px;
+            padding: 5px;
         }
 
-        #SettingsModule th
+        #SettingsModule th:last-child
         {
             font-weight: 600;
+            font-size: 18px;
+            text-decoration: underline;
+            border-left: none;
         }
-
+        
+        #SettingsModule th.empty
+        {
+            border-right: none;
+        }
+        
         #SettingsModule .hidden
         {
             display: none;
@@ -1267,46 +1300,50 @@ class SettingsModule extends BaseModule
         {
             width: 20px;
         }
-
+        
         #SettingsModule tr td:nth-child(2)
         {
             cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+            font-weight: 600;
         }
-
+        
         #SettingsModule ul
         {
             list-style-type: none;
+            margin-bottom: 0;
             padding: 0;
         }
-
+        
         #SettingsModule li
         {
             margin-top: 1px;
         }
-
+        
         #SettingsModule .valid
         {
             border: 2px solid green;
         }
-
+        
         #SettingsModule .invalid
         {
             border: 2px solid red;
         }
-
+        
         #SettingsModule input:not([type='checkbox']), #SettingsModule select
         {
             box-sizing: border-box;
             width: 150px;
         }
-
+        
         #saveSettings
         {
             margin-top: 10px;
         }
         `);
     }
-
+    
     addHeader()
     {
         this.contentElement.innerHTML = `
@@ -1322,14 +1359,15 @@ class SettingsModule extends BaseModule
     addBody()
     {
         let html = "";
-
+        
         html += `
         <table id="SettingsModule">
             <tr>
-                <th colspan="2">Modules</th>
+                <th class="empty"></th>
+                <th>Modules</th>
             </tr>
             `;
-
+            
         for(let [moduleName, module] of Object.entries(this.settings.modules))
         {
             html += "<tr class='module'>";
@@ -1340,7 +1378,7 @@ class SettingsModule extends BaseModule
             html += moduleName.replace(/\_/g, " ");
             html += "</td>";
             html += "</tr>";
-
+            
             html += `<tr class="${module.settingsHidden && (this.settings.apiKeyIsValid || moduleName != "API") ? "hidden" : ""}" id="${moduleName}-settings">`;
             html += "<td colspan='2'>";
             html += module.description;
@@ -1348,7 +1386,7 @@ class SettingsModule extends BaseModule
             for(let [settingName, setting] of Object.entries(module.settings))
             {
                 html += `<li title="${setting.description}" class="${settingName}">`;
-
+                
                 if(setting.valueType == "number")
                 {
                     html += `<input type="number" value="${setting.value}"/>`;
@@ -1360,21 +1398,21 @@ class SettingsModule extends BaseModule
                 else if(setting.valueType == "text")
                 {
                     let className = settingName == "API_key" ? (this.settings.apiKeyIsValid ? "valid" : "invalid") : "";
-
+                    
                     html += `<input type="text" class="${className}" value="${setting.value}"/>`;
                 }
                 else if(setting.valueType == "list")
                 {
                     html += "<select>";
-
+                    
                     for(let optionName of setting.possibleValues)
                     {
                         html += `<option value="${optionName}" ${optionName == setting.value ? "selected" : ""}>${optionName}</option>`;
                     }
-
+                    
                     html += "</select>";
                 }
-
+                
                 html += " " + settingName.replace(/\_/g, " ");
                 html += "</li>";
             }
@@ -1386,24 +1424,24 @@ class SettingsModule extends BaseModule
         </table>
         <button id="saveSettings">Save changes</button>
         `;
-
+        
         this.contentElement.innerHTML += html;
     }
 
     addJs()
     {
         let base = this;
-
+        
         document.querySelectorAll("#SettingsModule tr:not(:first-child):not([id$='settings'])").forEach(function(e)
         {
             e.addEventListener("click", function(e)
             {
                 if(e.target.nodeName == "TD" && e.target == e.target.parentNode.lastElementChild)
                 {
-
+                    
                     let module = base.settings.modules[e.target.innerHTML.replace(/ /g, "_")];
                     this.nextElementSibling.classList.toggle("hidden");
-
+                    
                     if(module)
                     {
                         module.settingsHidden = this.nextElementSibling.className.includes("hidden") ? true : false;
@@ -1412,7 +1450,7 @@ class SettingsModule extends BaseModule
                 }
             });
         });
-
+        
         document.querySelector("#saveSettings").addEventListener("click", e =>
         {
             this.loadSettingsFromTable();
@@ -1421,11 +1459,11 @@ class SettingsModule extends BaseModule
             .then(response =>
             {
                 response.json()
-                .then(json =>
+                .then(json => 
                 {
                     this.settings.apiKeyIsValid = !json.hasOwnProperty("error");
                     this.saveSettings();
-
+                    
                     document.location.reload();
                 });
             });
@@ -1436,31 +1474,31 @@ class SettingsModule extends BaseModule
     {
         localStorage.setItem("AquaTools_settings", JSON.stringify(this.settings));
     }
-
+    
     loadSettingsFromTable()
     {
-        document.querySelectorAll("#SettingsModule .module").forEach(tr =>
+        document.querySelectorAll("#SettingsModule .module").forEach(tr => 
         {
             let module = this.settings.modules[tr.lastChild.innerHTML.replace(/ /g, "_")];
-
+            
             if(!tr.firstChild.querySelector("input").disabled)
             {
                 module.isActive = tr.firstChild.querySelector("input").checked;
             }
         });
-
-        document.querySelectorAll("#SettingsModule [id$='-settings']").forEach(tr =>
+        
+        document.querySelectorAll("#SettingsModule [id$='-settings']").forEach(tr => 
         {
             let moduleName = tr.id.split("-settings")[0];
-
-            tr.querySelectorAll("li").forEach(li =>
+            
+            tr.querySelectorAll("li").forEach(li => 
             {
                 let settingName = li.className;
                 let settingValue = li.querySelector("input, select").value;
-
+                
                 this.settings.modules[moduleName].settings[settingName].value = settingValue;
             });
-
+            
         });
 
         this.saveSettings();
