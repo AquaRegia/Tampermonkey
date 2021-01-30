@@ -812,7 +812,7 @@ class ChainTargetsModule extends BaseModule
         let nextTarget;
         
         let unknownLevelTargets = this.unknownTargets.filter(e => e.level == 0);
-        let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 15000) && e.status.state != "Okay");
+        let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 60000) && e.status.state != "Okay");
         let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
         let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
         
