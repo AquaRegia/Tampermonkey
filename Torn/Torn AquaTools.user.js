@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.14
+// @version      1.15
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -620,6 +620,7 @@ class ChainTargetsModule extends BaseModule
         document.title = "Chain Targets | TORN";
         
         this.freezeTables = false;
+        this.attackLog = {};
         
         let newestTargetUpdate = this.allTargets.length == 0 ? 0 : this.allTargets.reduce((a, b) => a.lastUpdate > b.lastUpdate ? a : b, this.allTargets[0]).lastUpdate;
 
@@ -697,12 +698,12 @@ class ChainTargetsModule extends BaseModule
         nav.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="20" viewBox="1 0 22 25" fill="none" stroke="#B1B1B1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
     }
     
-    compareTargets(a, b)
+    compareTargets(a, b, ignoreSettings = false)
     {
         if(!a){return 1;}
         if(!b){return -1;}
         
-        if(this.avoidOnlineTargets)
+        if(!ignoreSettings && this.avoidOnlineTargets)
         {
             if(a.lastAction.status == "Offline" && b.lastAction.status != "Offline")
             {
@@ -714,7 +715,20 @@ class ChainTargetsModule extends BaseModule
             }
         }
     
-        return b.level - a.level;
+        return b.respectGain - a.respectGain;
+    }
+    
+    async updateAttackLog()
+    {
+        let json = await this.api("/user/?selections=attacks", 60000);
+        
+        for(let attack of Object.values(json.attacks))
+        {
+            if(attack.result != "Lost")
+            {
+                this.attackLog[attack.defender_id] = attack;
+            }
+        }
     }
     
     loadTargets()
@@ -742,6 +756,11 @@ class ChainTargetsModule extends BaseModule
             this.allTargets.push({id: 2500343, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
             this.allTargets.push({id: 2549277, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
         }*/
+        
+        if(document.location.href.includes(this.targetUrl))
+        {
+            this.updateAttackLog();
+        }
         
         let sorter = (a, b) => (this.compareTargets(a, b));
         
@@ -797,6 +816,8 @@ class ChainTargetsModule extends BaseModule
         let unknownLevelTargets = this.unknownTargets.filter(e => e.level == 0);
         let freeTargets = this.allTargets.filter(e => e.status.until > now && e.status.state != "Okay");
         let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
+        let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
+        
         let lastTargetInIdle = this.idleTargets.filter(e => e.status.state == "Okay").slice(this.maxOkay-1, this.maxOkay)[0];
         
         //If level isn't known, no priority can be determined, so pick this first
@@ -820,6 +841,11 @@ class ChainTargetsModule extends BaseModule
         {
             nextTarget = this.unknownTargets[0];
         }
+        //If the best online target in unknown is better than the last target in idle, pick it if it's older than 15 minutes
+        else if(this.avoidOnlineTargets && oldOnlineTargets.length > 0 && this.compareTargets(lastTargetInIdle, oldOnlineTargets[0], true) > 0)
+        {
+            nextTarget = oldOnlineTargets[0];
+        }
         //Assuming there's any Okay targets, pick the oldest one
         else if(this.okayTargets.length > 0)
         {
@@ -838,6 +864,16 @@ class ChainTargetsModule extends BaseModule
         nextTarget.level = json.level;
         nextTarget.lastUpdate = Date.now();
         nextTarget.lastAction = json.last_action;
+        nextTarget.respectGain = (Math.log(nextTarget.level) + 1)/4;
+        nextTarget.knowsFairFight = false;
+        
+        if(this.attackLog.hasOwnProperty(nextTarget.id))
+        {
+            nextTarget.respectGain *= this.attackLog[nextTarget.id].modifiers.fairFight;
+            nextTarget.knowsFairFight = true;
+        }
+        
+        nextTarget.respectGain = Math.round(nextTarget.respectGain * 100 + Number.EPSILON) / 100;
         
         localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
         
@@ -878,9 +914,10 @@ class ChainTargetsModule extends BaseModule
             .chainTargets table.chainTargetsTable th:nth-child(2){min-width: 160px;}
             .chainTargets table.chainTargetsTable th:nth-child(3){min-width: 40px;}
             .chainTargets table.chainTargetsTable th:nth-child(4){min-width: 50px;}
-            .chainTargets table.chainTargetsTable th:nth-child(5){min-width: 40px;}
-            .chainTargets table.chainTargetsTable th:nth-child(6){min-width: 50px;}
-            .chainTargets table.chainTargetsTable th:nth-child(7){min-width: 110px;}
+            .chainTargets table.chainTargetsTable th:nth-child(5){min-width: 50px;}
+            .chainTargets table.chainTargetsTable th:nth-child(6){min-width: 40px;}
+            .chainTargets table.chainTargetsTable th:nth-child(7){min-width: 50px;}
+            .chainTargets table.chainTargetsTable th:nth-child(8){min-width: 110px;}
             
             .chainTarget td
             {
@@ -933,7 +970,7 @@ class ChainTargetsModule extends BaseModule
     {
         let html = "";
         
-        for(let [id, title] of [["okayTargets", "Okay targets"], ["busyTargets", "Busy targets"], ["idleTargets", "Idle targets"], ["unknownTargets", "Outdated targets"]])
+        for(let [id, title] of [["okayTargets", "Top targets"], ["busyTargets", "Waiting targets"], ["idleTargets", "Upcoming targets"], ["unknownTargets", "Outdated targets"]])
         {
             html += `
                 <table class="chainTargetsTable" id="${id}">
@@ -943,6 +980,7 @@ class ChainTargetsModule extends BaseModule
                         <th>Faction</th>
                         <th>Name</th>
                         <th>Level</th>
+                        <th>Respect</th>
                         <th>State</th>
                         <th>Status</th>
                         <th>Action</th>
@@ -1013,6 +1051,11 @@ class ChainTargetsModule extends BaseModule
                 html += `</td>`;
                 html += `<td><a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">${user.name} [${user.id}]</a></td>`;
                 html += `<td style="text-align: center">${user.level}</td>`;
+                
+                let respectColor = "black";
+                if(user.knowsFairFight){respectColor = "var(--default-green-color)"}
+                
+                html += `<td style="text-align: center; color: ${respectColor}">${user.respectGain}</td>`;
                 
                 let stateColor = "var(--default-green-color)";
                 if(user.status.state == "Hospital"){stateColor = "var(--default-red-color"}
@@ -1605,7 +1648,8 @@ class SettingsModule extends BaseModule
             {
                 AquaTools: 
                 {
-                    iconID: "AquaToolsIcon", 
+                    //iconID: "AquaToolsIcon", 
+                    iconID: "icon1",
                     title: "AquaTools V" + GM_info.script.version, 
                     subtitle: "Module settings",
                     link: "/index.php?page=AquaTools"
@@ -1625,7 +1669,7 @@ class SettingsModule extends BaseModule
         });
         
         GM_addStyle(`
-        #AquaToolsIcon-sidebar
+        ul[class^='status-icons___'] li:first-child
         {
             background-image: url("data:image/svg+xml;base64,${this.svgString}");
         }
@@ -2091,4 +2135,3 @@ class SettingsModule extends BaseModule
 }
 
 let settings = new SettingsModule();
-
