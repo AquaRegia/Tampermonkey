@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.12
+// @version      1.2.0
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -91,24 +91,33 @@ class AjaxModule
         
         (function(original)
         {
-            window.XMLHttpRequest.prototype.open = function()
+            window.XMLHttpRequest = function()
             {
-                let result = original.apply(this, arguments);
-                let url = arguments[1];
+                let result = new original(arguments);
+                let stub;
                 
-                this.addEventListener("readystatechange", function()
+                result.addEventListener("readystatechange", function()
                 {
                     if(this.readyState == 4 && this.responseText[0] == "{")
                     {
                         let json = JSON.parse(this.responseText);
                         //console.log("XHR:", json);
-                        base._runAjaxCallbacks(url, false, json);
+                        stub = base._runAjaxCallbacks(this.responseURL, false, json);
+                        
+                        if(stub)
+                        {
+                            Object.defineProperty(this, "responseText", 
+                            {
+                                get: function(){return JSON.stringify(stub)}
+                            });
+                        }
                     }
                 });
                 
                 return result;
             };
-        })(window.XMLHttpRequest.prototype.open);
+            window.XMLHttpRequest.prototype = original.prototype;
+        })(window.XMLHttpRequest);
     }
     
     _overrideFetch()
@@ -538,19 +547,23 @@ class ChainTargetsModule extends BaseModule
     constructor()
     {
         super("/blacklist.php?page=ChainTargets");
+        this.loadTargets();
+        
+        this.maxOkay = 5;
+        this.maxBusy = 10;
         
         this.addAjaxListener("getSidebarData", false, (json) => 
         {
             json.lists.chains = 
             {
                 added: null, 
-                elements: null, 
                 favorite: null, 
                 icon: "factions", 
                 link: "blacklist.php?page=ChainTargets", 
                 linkOrder: 23, 
                 name: "Chains", 
-                status: null,
+                status: null, 
+                elements: this.allTargets.filter(e => e.level > 0).map(e => ({name: e.name, link: "/profiles.php?XID=" + e.id, status: "Idle", lastAction: parseInt(((Date.now() - e.lastUpdate)/1000))}))
             };
             
             if(document.location.href.includes(this.targetUrl))
@@ -562,20 +575,304 @@ class ChainTargetsModule extends BaseModule
             return json;
         });
         
+        this.addSVGToChainsList();
+        
+        if(document.location.href.includes("/profiles.php?"))
+        {
+            this.addAjaxListener("getProfileData", false, (json) => 
+            {
+                let newButton = 
+                {
+                    actionDescription: "Add to chain list", 
+                    link: "#", 
+                    message: `Toggle ${json.user.playerName} on your chain list`,
+                    state: "active"
+                };
+
+                let newButtonsObject = {};
+                
+                for(let [name, button] of Object.entries(json.profileButtons.buttons))
+                {
+                    newButtonsObject[name] = button;
+                    
+                    if(name == "addToEnemyList")
+                    {
+                        newButtonsObject.addToChainList = newButton;
+                    }
+                }
+                
+                json.profileButtons.buttons = newButtonsObject;
+                
+                this.visitedProfileID = json.user.userID;
+                
+                return json;
+            });
+            
+            this.modifyProfileButton();
+        }
+        
         this.ready();
     }
     
     init()
     {
+        document.title = "Chain Targets | TORN";
+        
+        this.freezeTables = false;
+        
+        let newestTargetUpdate = this.allTargets.length == 0 ? 0 : this.allTargets.reduce((a, b) => a.lastUpdate > b.lastUpdate ? a : b, this.allTargets[0]).lastUpdate;
+
         this.replaceContent("content-wrapper", element =>
         {
             this.contentElement = element;
+            this.contentElement.classList.add("chainTargets");
 
-            //this.addStyle();
+            this.addStyle();
             this.addHeader();
-            //this.addBody();
-            //this.addJs();
+            
+            if(Date.now() > (newestTargetUpdate+5000))
+            {
+                this.addBody();
+                this.addJs();
+                this.updateTarget();
+                setInterval(this.updateTarget.bind(this), 2000);
+            }
+            else
+            {
+                this.contentElement.innerHTML += "<p>It looks like you might be running this already in another tab. If not, wait a couple of seconds and then update this page.</p>";
+            }
         });
+    }
+    
+    async modifyProfileButton()
+    {
+        let button;
+        
+        while(!(button = document.querySelector(".profile-button-addToChainList")))
+        {
+            await Utils.sleep(100);
+        }
+        
+        let activeButton = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="-5 -5 36 36" fill="none" stroke="#A1C1A1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+        let inactiveButton = `<svg xmlns="http://www.w3.org/2000/svg" width="46" height="46" viewBox="-5 -5 36 36" fill="none" stroke="#B1B1B1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+        
+        if(this.allTargets.filter(e => e.id == this.visitedProfileID).length > 0)
+        {
+            button.innerHTML = activeButton;
+        }
+        else
+        {
+            button.innerHTML = inactiveButton;
+        }
+        
+        button.addEventListener("click", e => 
+        {
+            this.loadTargets();
+            let target = this.allTargets.filter(e => e.id == this.visitedProfileID);
+            
+            if(target.length > 0)
+            {
+                localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets.filter(e => e.id != target[0].id)));
+                button.innerHTML = inactiveButton;
+            }
+            else
+            {
+                this.allTargets.push({id: this.visitedProfileID, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+                localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
+                button.innerHTML = activeButton;
+            }
+        });
+    }
+    
+    async addSVGToChainsList()
+    {
+        let nav;
+        
+        while(!(nav = document.querySelector("#nav-chains span")))
+        {
+            await Utils.sleep(100);
+        }
+        
+        nav.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="15" height="20" viewBox="1 0 22 25" fill="none" stroke="#B1B1B1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`;
+    }
+    
+    loadTargets()
+    {
+        let now = Date.now();
+        
+        this.allTargets = JSON.parse(localStorage.getItem("AquaTools_ChainTargets_targets") || "[]");
+        
+        /*if(this.allTargets.length == 0)
+        {
+            this.allTargets.push({id: 1043377, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 227273, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 1510560, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 172552, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 2281871, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 2424664, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 134432, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 244894, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 504699, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 984117, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 1102071, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 1311704, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 1499091, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 1500493, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 2500343, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+            this.allTargets.push({id: 2549277, faction: "", status: "", name: "", level: 0, lastUpdate: 0, highlighted: false});
+        }*/
+        
+        let sorter = (a, b) => b.level - a.level;
+        
+        this.okayTargets = this.allTargets.sort(sorter).filter(e => (now <= (e.lastUpdate + 300000)) && e.status.state == "Okay").slice(0, this.maxOkay);
+        let lowestLevelInOkay = this.okayTargets.length == 0 ? 0 : this.okayTargets.reduce((a, b) => a.level < b.level ? a : b, this.okayTargets[0]).level;
+        
+        this.busyTargets = this.allTargets.sort(sorter).filter(e => (now <= (e.lastUpdate + 300000)) && e.status.state != "Okay" && e.level > lowestLevelInOkay).slice(0, this.maxBusy);
+        this.idleTargets = this.allTargets.sort(sorter).filter(e => (now <= (e.lastUpdate + 300000))).slice(this.okayTargets.length + this.busyTargets.length);
+        this.unknownTargets = this.allTargets.sort(sorter).filter(e => now > (e.lastUpdate + 300000));
+    }
+    
+    async updateTarget()
+    {
+        if(this.allTargets.length == 0){return;}
+        
+        let now = Date.now();
+        let nextTarget;
+        
+        let unknownLevelTargets = this.unknownTargets.filter(e => e.level == 0);
+        let freeTargets = this.allTargets.filter(e => e.status.until > now && e.status.state != "Okay");
+        let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
+        
+        /*if(unknownLevelTargets.length > 0)
+        {
+            nextTarget = unknownLevelTargets[0];
+        }*/
+        
+        //If level isn't known, no priority can be determined, so pick this first
+        if(unknownLevelTargets.length > 0)
+        {
+            nextTarget = unknownLevelTargets[0];
+        }
+        //Targets that should be out of hospital or jail by now, more available targets == better choices
+        else if(freeTargets.length > 0)
+        {
+            nextTarget = freeTargets[0];
+        }
+        //These are all better than the worst one in the okay list, so pick one if 
+        //it's older than 1 minute in case they've been revived or busted out of jail
+        else if(oldBusyTargets.length > 0)
+        {
+            nextTarget = oldBusyTargets[0];
+        }
+        //If the idle list isn't full, pick the oldest Okay one from unknown targets
+        else if(this.unknownTargets.length > 0 && this.idleTargets.filter(e => e.status.state == "Okay").length < this.maxOkay)
+        {
+            nextTarget = this.unknownTargets.filter(e => e.status.state == "Okay").reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.unknownTargets[0]);
+        }
+        //Idle list still isn't full, and there are no Okay unknown ones, so just pick the best one
+        else if(this.unknownTargets.length > 0 && this.idleTargets.filter(e => e.status.state == "Okay").length < this.maxOkay)
+        {
+            nextTarget = this.unknownTargets[0];
+        }
+        //Assuming there's any Okay targets, pick the oldest one
+        else if(this.okayTargets.length > 0)
+        {
+            nextTarget = this.okayTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.okayTargets[0]);
+        }
+        //Both Okay and idle is empty, hail mary and pick the oldest one from any category
+        else
+        {
+            console.log("else");
+            nextTarget = this.allTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.allTargets[0]);
+        }
+        
+        this.allTargets.forEach(e => e.highlighted = false);
+        nextTarget.highlighted = true;
+        
+        let json = await this.api(`/user/${nextTarget.id}?selections=profile`, 0);
+
+        nextTarget.faction = json.faction;
+        nextTarget.status = json.status;
+        nextTarget.name = json.name;
+        nextTarget.level = json.level;
+        nextTarget.lastUpdate = Date.now();
+        
+        localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
+        this.loadTargets();
+        
+        this.updateTableBody();
+    }
+    
+    addStyle()
+    {
+        GM_addStyle(`
+            .chainTargets *
+            {
+                all: revert;
+            }
+            
+            .chainTargets table.chainTargetsTable
+            {
+                border-collapse: collapse;
+                margin-bottom: 30px;
+            }
+            
+            .chainTargets table.chainTargetsTable a
+            {
+                color: black;
+            }
+            
+            .chainTargets table.chainTargetsTable th, .chainTargets table.chainTargetsTable td
+            {
+                border: 1px solid black;
+                padding: 5px;
+            }
+            
+            .chainTargets table.chainTargetsTable th
+            {
+                background-color: #EEE;
+            }
+            
+            .chainTargets table.chainTargetsTable th:nth-child(1){min-width: 60px;}
+            .chainTargets table.chainTargetsTable th:nth-child(2){min-width: 160px;}
+            .chainTargets table.chainTargetsTable th:nth-child(3){min-width: 40px;}
+            .chainTargets table.chainTargetsTable th:nth-child(4){min-width: 60px;}
+            .chainTargets table.chainTargetsTable th:nth-child(5){min-width: 110px;}
+            .chainTargets table.chainTargetsTable th:nth-child(6){min-width: 50px;}
+            
+            .chainTarget td
+            {
+                background-color: #CCC;
+            }
+            
+            .chainTargets tr:nth-child(2n) td
+            {
+                background-color: #DDD;
+            }
+            
+            .chainTargets table.chainTargetsTable caption
+            {
+                font-size: 16px;
+                font-weight: 600;
+                margin-bottom: 5px;
+            }
+            
+            .chainTargets table.chainTargetsTable .paddedTime
+            {
+                font-family: Courier New;
+                font-weight: 600;
+            }
+            
+            .chainTargets table.chainTargetsTable .highlighted td
+            {
+                background-color: #CFC;
+            }
+            
+            .chainTargets table.chainTargetsTable tbody.frozen td
+            {
+                background-color: #a5c5d9;
+            }
+        `);
     }
     
     addHeader()
@@ -588,6 +885,150 @@ class ChainTargetsModule extends BaseModule
         <hr class="page-head-delimiter">
         </div>
         `;
+    }
+    
+    addBody()
+    {
+        let html = "";
+        
+        html += `
+        <table class="chainTargetsTable" id="okayTargets">
+            <caption>Okay targets</caption>
+            <thead>
+                <tr>
+                    <th>Faction</th>
+                    <th>Name</th>
+                    <th>Level</th>
+                    <th>State</th>
+                    <th>Last update</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+        
+        <table class="chainTargetsTable" id="busyTargets">
+            <caption>Busy targets</caption>
+            <thead>
+                <tr>
+                    <th>Faction</th>
+                    <th>Name</th>
+                    <th>Level</th>
+                    <th>State</th>
+                    <th>Last update</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+        
+        <table class="chainTargetsTable" id="idleTargets">
+            <caption>Idle targets</caption>
+            <thead>
+                <tr>
+                    <th>Faction</th>
+                    <th>Name</th>
+                    <th>Level</th>
+                    <th>State</th>
+                    <th>Last update</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+        
+        <table class="chainTargetsTable" id="unknownTargets">
+            <caption>Unknown targets</caption>
+            <thead>
+                <tr>
+                    <th>Faction</th>
+                    <th>Name</th>
+                    <th>Level</th>
+                    <th>State</th>
+                    <th>Last update</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+        `;
+        
+        this.contentElement.innerHTML += html;
+    }
+    
+    addJs()
+    {
+        document.querySelectorAll(".chainTargetsTable tbody").forEach(tbody =>
+        {
+            tbody.addEventListener("mouseenter", e => 
+            {
+                this.freezeTables = true;
+                tbody.classList.add("frozen");
+            });
+        });
+        
+        document.querySelectorAll(".chainTargetsTable tbody").forEach(tbody =>
+        {
+            tbody.addEventListener("mouseleave", e => 
+            {
+                this.freezeTables = false;
+                tbody.classList.remove("frozen");
+            });
+        });
+    }
+    
+    updateTableBody()
+    {
+        let now = Date.now();
+        
+        let okayTargetsBody = document.querySelector("#okayTargets tbody");
+        let busyTargetsBody = document.querySelector("#busyTargets tbody");
+        let idleTargetsBody = document.querySelector("#idleTargets tbody");
+        let unknownTargetsBody = document.querySelector("#unknownTargets tbody");
+        
+        let pairs = [
+            [okayTargetsBody, this.okayTargets], 
+            [busyTargetsBody, this.busyTargets], 
+            [idleTargetsBody, this.idleTargets], 
+            [unknownTargetsBody, this.unknownTargets], 
+        ];
+        
+        for(let [element, targets] of pairs)
+        {
+            if(element.classList.contains("frozen")){continue;}
+            
+            let html = "";
+            
+            for(let user of targets)
+            {
+                html += `<tr${user.highlighted ? " class='highlighted'" : ""}>`;
+                
+                html += `<td style="text-align: center"><a target="_blank" href="https://www.torn.com/factions.php?step=profile&ID=${user.faction.faction_id}">${user.faction.faction_tag}</a></td>`;
+                html += `<td><a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">${user.name} [${user.id}]</a></td>`;
+                html += `<td style="text-align: center">${user.level}</td>`;
+                html += `<td>${user.status.state}</td>`;
+                html += `<td style="text-align: center"><span class="paddedTime">${String(parseInt((now - user.lastUpdate)/1000)).padLeft(4, String.fromCharCode(160))}</span> seconds ago</td>`;
+                
+                html += `<td style="text-align: center">`;
+                
+                if(user.status.state == "Okay")
+                {
+                    html += `<a target="_blank" href="https://www.torn.com/loader2.php?sid=getInAttack&user2ID=${user.id}">Attack</a>`;
+                }
+                else
+                {
+                    html += `<a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">Profile</a>`;
+                }
+                
+                html += "</td></tr>";
+            }
+            
+            element.innerHTML = html;
+        }
     }
 }
 
@@ -1148,7 +1589,7 @@ class SettingsModule extends BaseModule
                 AquaTools: 
                 {
                     iconID: "AquaToolsIcon", 
-                    title: "AquaTools " + GM_info.script.version, 
+                    title: "AquaTools V" + GM_info.script.version, 
                     subtitle: "Module settings",
                     link: "/index.php?page=AquaTools"
                 }
@@ -1181,6 +1622,8 @@ class SettingsModule extends BaseModule
 
     init()
     {
+        document.title = `AquaTools V${GM_info.script.version} Settings | TORN`;
+        
         this.replaceContent("content-wrapper", element =>
         {
             this.contentElement = element;
@@ -1453,7 +1896,7 @@ class SettingsModule extends BaseModule
     {
         this.contentElement.innerHTML = `
         <div class="content-title m-bottom10">
-            <h4 id="skip-to-content" class="left">AquaTool ${GM_info.script.version} Settings</h4>
+            <h4 id="skip-to-content" class="left">AquaTools V${GM_info.script.version} Settings</h4>
 
         <div class="clear"></div>
         <hr class="page-head-delimiter">
@@ -1611,4 +2054,3 @@ class SettingsModule extends BaseModule
 }
 
 let settings = new SettingsModule();
-
