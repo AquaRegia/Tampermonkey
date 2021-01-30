@@ -723,7 +723,7 @@ class ChainTargetsModule extends BaseModule
         
         this.allTargets = JSON.parse(localStorage.getItem("AquaTools_ChainTargets_targets") || "[]");
         
-        if(this.allTargets.length == 0)
+        /*if(this.allTargets.length == 0)
         {
             this.allTargets.push({id: 1043377, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
             this.allTargets.push({id: 227273, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
@@ -741,7 +741,7 @@ class ChainTargetsModule extends BaseModule
             this.allTargets.push({id: 1500493, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
             this.allTargets.push({id: 2500343, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
             this.allTargets.push({id: 2549277, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-        }
+        }*/
         
         let sorter = (a, b) => (this.compareTargets(a, b));
         
