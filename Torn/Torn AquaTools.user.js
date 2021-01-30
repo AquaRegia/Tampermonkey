@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.2.0
+// @version      1.13
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
