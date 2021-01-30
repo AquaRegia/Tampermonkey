@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.18
+// @version      1.19
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -73,6 +73,17 @@ class Utils
     static reverseString(s)
     {
         return Array.from(s).reverse().join("");
+    }
+    
+    static formatTime(seconds)
+    {
+        var hours = parseInt(seconds/3600);
+        seconds -= hours*3600;
+
+        var minutes = parseInt(seconds/60);
+        seconds -= minutes*60;
+
+        return "[" + (hours < 10 ? "0" : "") + hours + ":" + (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds + "]";
     }
 }
 
@@ -901,7 +912,7 @@ class ChainTargetsModule extends BaseModule
             .chainTargets table.chainTargetsTable th:nth-child(2){min-width: 160px;}
             .chainTargets table.chainTargetsTable th:nth-child(3){min-width: 40px;}
             .chainTargets table.chainTargetsTable th:nth-child(4){min-width: 50px;}
-            .chainTargets table.chainTargetsTable th:nth-child(5){min-width: 50px;}
+            .chainTargets table.chainTargetsTable th:nth-child(5){min-width: 55px;}
             .chainTargets table.chainTargetsTable th:nth-child(6){min-width: 40px;}
             .chainTargets table.chainTargetsTable th:nth-child(7){min-width: 50px;}
             .chainTargets table.chainTargetsTable th:nth-child(8){min-width: 110px;}
@@ -1055,7 +1066,14 @@ class ChainTargetsModule extends BaseModule
                 if(user.status.state == "Abroad"){stateColor = "var(--default-blue-color"}
                 if(user.status.state == "Jail"){stateColor = "#FF8800"}
                 
-                html += `<td style="color: ${stateColor}">${user.status.state}</td>`;
+                let timeLeft;
+                
+                if(user.status.state == "Hospital" || user.status.state == "Jail")
+                {
+                    timeLeft = Utils.formatTime(Math.max(0, parseInt((user.status.until*1000 - now)/1000)));
+                }
+                
+                html += `<td style="color: ${stateColor}">${timeLeft ? timeLeft : user.status.state}</td>`;
                 
                 let statusColor = "var(--default-green-color)";
                 if(user.lastAction.status == "Offline"){statusColor = "var(--default-red-color)"}
