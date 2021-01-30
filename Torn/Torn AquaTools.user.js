@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.17
+// @version      1.18
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -571,6 +571,13 @@ class ChainTargetsModule extends BaseModule
             {
                 json.lists.chains.status = "active";
                 json.lists.enemies.status = null;
+                GM_addStyle(`
+                #nav-enemies > div
+                {
+                    background-color: var(--default-bg-panel-color);
+                    font-weight: unset;
+                }
+                `);
             }
 
             return json;
@@ -1020,9 +1027,7 @@ class ChainTargetsModule extends BaseModule
         for(let [element, targets] of pairs)
         {
             if(element.classList.contains("frozen")){continue;}
-            
-            
-            
+
             let html = "";
             
             for(let user of targets)
@@ -1675,6 +1680,14 @@ class SettingsModule extends BaseModule
     init()
     {
         document.title = `AquaTools V${GM_info.script.version} Settings | TORN`;
+        
+        GM_addStyle(`
+        #nav-home > div
+        {
+            background-color: var(--default-bg-panel-color);
+            font-weight: unset;
+        }
+        `);
         
         this.replaceContent("content-wrapper", element =>
         {
