@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.15
+// @version      1.16
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -679,7 +679,7 @@ class ChainTargetsModule extends BaseModule
             }
             else
             {
-                this.allTargets.push({id: this.visitedProfileID, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
+                this.allTargets.push({id: this.visitedProfileID, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0, respectGain: 0});
                 localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
                 button.innerHTML = activeButton;
             }
@@ -1465,12 +1465,13 @@ class CityFindsModule extends BaseModule
 
 class CompanyEffectivenessModule extends BaseModule
 {
-    constructor(effectivenessLimit, addictionLimit, notificationInterval, cacheAge)
+    constructor(effectivenessLimit, addictionLimit, pushNotification, notificationInterval, cacheAge)
     {
         super("");
         
         this.effectivenessLimit = effectivenessLimit;
         this.addictionLimit = addictionLimit;
+        this.pushNotification = pushNotification == "true";
         this.notificationInterval = notificationInterval;
         this.cacheAge = cacheAge;
         
@@ -1544,17 +1545,20 @@ class CompanyEffectivenessModule extends BaseModule
                 {
                     document.querySelector("#effectivenessWarning").innerHTML = `!`;
 
-                    if(Date.now() > new Date(parseInt(localStorage.getItem("lastEffectivenessNotification") || 0) + this.notificationInterval*1000))
+                    if(this.pushNotification)
                     {
-                        localStorage.setItem("lastEffectivenessNotification", Date.now());
-
-                        GM_notification(
+                        if(Date.now() > new Date(parseInt(localStorage.getItem("lastEffectivenessNotification") || 0) + this.notificationInterval*1000))
                         {
-                            title: "Time to rehab!",
-                            body: `Your effectiveness (${employee.effectiveness.total}) or addiction (${employee.effectiveness.addiction || 0}) has reached its threshold!`,
-                            clickHandler: () => document.location.href = "https://www.torn.com/travelagency.php", 
-                            image: "data:image/png;base64,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"
-                        });
+                            localStorage.setItem("lastEffectivenessNotification", Date.now());
+
+                            GM_notification(
+                            {
+                                title: "Time to rehab!",
+                                body: `Your effectiveness (${employee.effectiveness.total}) or addiction (${employee.effectiveness.addiction || 0}) has reached its threshold!`,
+                                clickHandler: () => document.location.href = "https://www.torn.com/travelagency.php", 
+                                image: "data:image/png;base64,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"
+                            });
+                        }
                     }
                 }
             }
@@ -1720,7 +1724,7 @@ class SettingsModule extends BaseModule
         }
     }
     
-    initSettings()
+    initSettings(reset = false)
     {
         this.settings = JSON.parse(localStorage.getItem("AquaTools_settings")) || {};
         
@@ -1732,7 +1736,10 @@ class SettingsModule extends BaseModule
                 {
                     isActive: true, 
                     needsApiKey: false, //ironic, isn't it?
-                    description: "Description of API",
+                    description: `The API module is the single point of contact between the Torn API and all other modules. 
+                    In order to avoid spamming the API too much it has built-in features for both throttling and caching.<br/><br/>
+                    The cache contains all requests sent within the past 5 minutes, so setting the cache age to more than that in the module settings will make no difference.<br/><br/>
+                    Some of the modules will work without providing your API key, but to get full access to all features you should enter it below.`,
                     settingsHidden: true, 
                     settings: 
                     {
@@ -1754,7 +1761,10 @@ class SettingsModule extends BaseModule
                 {
                     isActive: false, 
                     needsApiKey: false, 
-                    description: "Description of Bazaar Sorter", 
+                    description: `This adds another button to all bazaars, and is used to order the items there by quality. 
+                    When you first enter the bazaar, this button might be red, which means you can't use it yet. This is because 
+                    it hasn't seen all items in the bazaar, and you can enable it by scrolling down to the bottom. After that 
+                    it should be green, and will work exactly like the other sorting buttons.`, 
                     settingsHidden: true, 
                     settings: {}
                 }, 
@@ -1762,27 +1772,31 @@ class SettingsModule extends BaseModule
                 {
                     isActive: false, 
                     needsApiKey: true, 
-                    description: "Description of Chain Targets", 
+                    description: `This adds another list below Friends and Enemies, although it's actually more of a tool than just a list. 
+                    The idea is that you have a pretty short list of top targets, and as you attack them the list continuously gets backfilled with more targets. 
+                    <br/><br/>Every 1.5 seconds it picks a target in the list and refreshes the information about it, exactly <i>which</i> target it picks is a somewhat complicated 
+                    process, but it has the objective of maximizing respect gain.<br/><br/>
+                    To add someone to this list, a new button has been added to all player profiles. It has a picture of a chain, and if the chain is green it means that person is already on your list.`, 
                     settingsHidden: true,
                     settings: 
                     {
-                        Okay_limit:
+                        Top_list_limit:
                         {
                             value: 5, 
                             valueType: "number", 
-                            description: "Limits the number of targets in the okay list, a lower limit means more frequent updates"
+                            description: "Limits the number of targets in the top list, a lower limit means more frequent updates"
                         }, 
-                        Busy_limit:
+                        Waiting_list_limit:
                         {
-                            value: 5, 
+                            value: 10, 
                             valueType: "number", 
-                            description: "Limits the number of targets in the busy list, a lower limits means more frequent updates for the okay list"
+                            description: "Limits the number of targets in the waiting list, a lower limit means more frequent updates for the top list"
                         }, 
                         Avoid_online_targets:
                         {
-                            value: "false", 
+                            value: "true", 
                             valueType: "boolean", 
-                            description: "Lower the priority of targets that are online or idle, and only add them to the okay list if there are no more offline targets available"
+                            description: "Lower the priority of targets that are online or idle, and only add them to the top list if there are no offline targets available"
                         }
                     }
                 },
@@ -1790,7 +1804,7 @@ class SettingsModule extends BaseModule
                 {
                     isActive: false, 
                     needsApiKey: true, 
-                    description: "Description of City Finds", 
+                    description: `This adds a table above the map in the City, containing all of the items you have lying around on the map. You can sort and group them in different ways using the settings below.`, 
                     settingsHidden: true, 
                     settings:
                     {
@@ -1832,7 +1846,8 @@ class SettingsModule extends BaseModule
                 {
                     isActive: false, 
                     needsApiKey: true, 
-                    description: "Description of Company Effectiveness", 
+                    description: `This shows your company effectiveness and job points when you hover the job link in the sidebar. 
+                    It will also add a red exclamation point to the link when you drop below the limit you set below.`, 
                     settingsHidden: true, 
                     settings: 
                     {
@@ -1847,6 +1862,12 @@ class SettingsModule extends BaseModule
                             value: -5, 
                             valueType: "number", 
                             description: "You will be notified when your addiction penalty is this or lower"
+                        }, 
+                        Push_notification:
+                        {
+                            value: "true",
+                            valueType: "boolean", 
+                            description: "Sends you a notification when you hit a threshold, in addition to showing the red exclamation point on the jobs link"
                         }, 
                         Notification_interval:
                         {
@@ -1865,21 +1886,36 @@ class SettingsModule extends BaseModule
             }
         };
 
-        this.settings = {...settingsTemplate, ...this.settings};
-        this.settings.modules = {...settingsTemplate.modules, ...this.settings.modules};
-        
-        for(let [name, module] of Object.entries(this.settings.modules))
+        if(reset)
         {
-            module.settings = {...settingsTemplate.modules[name].settings, ...module.settings};
+            let key = this.settings.modules.API.settings.API_key;
+            let isValid = this.settings.apiKeyIsValid;
             
-            module.description = settingsTemplate.modules[name].description;
+            this.settings = settingsTemplate;
+            this.settings.modules.API.settings.API_key = key;
+            this.settings.apiKeyIsValid = isValid;
+        }
+        else
+        {
+            this.settings = {...settingsTemplate, ...this.settings};
+            this.settings.modules = {...settingsTemplate.modules, ...this.settings.modules};
             
-            for(let [settingName, setting] of Object.entries(module.settings))
+            for(let [name, module] of Object.entries(this.settings.modules))
             {
-                setting.description = settingsTemplate.modules[name].settings[settingName].description;
-                if(setting.hasOwnProperty("possibleValues"))
+                module.settings = {...settingsTemplate.modules[name].settings, ...module.settings};
+                
+                module.description = settingsTemplate.modules[name].description;
+                
+                for(let [settingName, setting] of Object.entries(module.settings))
                 {
-                    setting.possibleValues = settingsTemplate.modules[name].settings[settingName].possibleValues;
+                    if(settingsTemplate.modules[name].settings[settingName])
+                    {
+                        setting.description = settingsTemplate.modules[name].settings[settingName].description;
+                        if(setting.hasOwnProperty("possibleValues"))
+                        {
+                            setting.possibleValues = settingsTemplate.modules[name].settings[settingName].possibleValues;
+                        }
+                    }
                 }
             }
         }
@@ -1890,7 +1926,7 @@ class SettingsModule extends BaseModule
     addStyle()
     {
         GM_addStyle(`
-        #SettingsModule, #SettingsModule *, #saveSettings
+        #SettingsModule, #SettingsModule *, #saveSettings, #resetSettings
         {
             all: revert;
         }
@@ -1899,6 +1935,7 @@ class SettingsModule extends BaseModule
         {
             border-collapse: collapse;
             min-width: 400px;
+            max-width: 400px;
         }
         
         #SettingsModule th, #SettingsModule td
@@ -1966,7 +2003,7 @@ class SettingsModule extends BaseModule
             width: 150px;
         }
         
-        #saveSettings
+        #saveSettings, #resetSettings
         {
             margin-top: 10px;
         }
@@ -2011,47 +2048,52 @@ class SettingsModule extends BaseModule
             html += `<tr class="${module.settingsHidden && (this.settings.apiKeyIsValid || moduleName != "API") ? "hidden" : ""}" id="${moduleName}-settings">`;
             html += "<td colspan='2'>";
             html += module.description;
-            html += "<ul>";
-            for(let [settingName, setting] of Object.entries(module.settings))
+            
+            if(Object.keys(module.settings).length > 0)
             {
-                html += `<li title="${setting.description}" class="${settingName}">`;
-                
-                if(setting.valueType == "number")
+                html += "<ul>";
+                for(let [settingName, setting] of Object.entries(module.settings))
                 {
-                    html += `<input type="number" value="${setting.value}"/>`;
-                }
-                else if(setting.valueType == "boolean")
-                {
-                    html += `<select><option value="true" ${setting.value == "true" ? "selected" : ""}>True</option><option value="false" ${setting.value == "false" ? "selected" : ""}>False</option></select>`;
-                }
-                else if(setting.valueType == "text")
-                {
-                    let className = settingName == "API_key" ? (this.settings.apiKeyIsValid ? "valid" : "invalid") : "";
+                    html += `<li title="${setting.description}" class="${settingName}">`;
                     
-                    html += `<input type="text" class="${className}" value="${setting.value}"/>`;
-                }
-                else if(setting.valueType == "list")
-                {
-                    html += "<select>";
-                    
-                    for(let optionName of setting.possibleValues)
+                    if(setting.valueType == "number")
                     {
-                        html += `<option value="${optionName}" ${optionName == setting.value ? "selected" : ""}>${optionName}</option>`;
+                        html += `<input type="number" value="${setting.value}"/>`;
+                    }
+                    else if(setting.valueType == "boolean")
+                    {
+                        html += `<select><option value="true" ${setting.value == "true" ? "selected" : ""}>True</option><option value="false" ${setting.value == "false" ? "selected" : ""}>False</option></select>`;
+                    }
+                    else if(setting.valueType == "text")
+                    {
+                        let className = settingName == "API_key" ? (this.settings.apiKeyIsValid ? "valid" : "invalid") : "";
+                        
+                        html += `<input type="text" class="${className}" value="${setting.value}"/>`;
+                    }
+                    else if(setting.valueType == "list")
+                    {
+                        html += "<select>";
+                        
+                        for(let optionName of setting.possibleValues)
+                        {
+                            html += `<option value="${optionName}" ${optionName == setting.value ? "selected" : ""}>${optionName}</option>`;
+                        }
+                        
+                        html += "</select>";
                     }
                     
-                    html += "</select>";
+                    html += " " + settingName.replace(/\_/g, " ");
+                    html += "</li>";
                 }
-                
-                html += " " + settingName.replace(/\_/g, " ");
-                html += "</li>";
+                html += "</ul>"
             }
-            html += "</ul>"
             html += "</td>";
         }
 
         html += `
         </table>
         <button id="saveSettings">Save changes</button>
+        <button id="resetSettings">Reset settings</button>
         `;
         
         this.contentElement.innerHTML += html;
@@ -2096,6 +2138,15 @@ class SettingsModule extends BaseModule
                     document.location.reload();
                 });
             });
+        });
+        
+        document.querySelector("#resetSettings").addEventListener("click", e =>
+        {
+            if(window.confirm("This will reset all settings (except API key) to default, are you sure?"))
+            {
+                this.initSettings(true);
+                document.location.reload();
+            }
         });
     }
 
