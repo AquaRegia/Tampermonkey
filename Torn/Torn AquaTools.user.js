@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.16
+// @version      1.17
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -737,26 +737,6 @@ class ChainTargetsModule extends BaseModule
         
         this.allTargets = JSON.parse(localStorage.getItem("AquaTools_ChainTargets_targets") || "[]");
         
-        /*if(this.allTargets.length == 0)
-        {
-            this.allTargets.push({id: 1043377, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 227273, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 1510560, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 172552, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 2281871, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 2424664, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 134432, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 244894, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 504699, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 984117, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 1102071, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 1311704, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 1499091, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 1500493, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 2500343, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-            this.allTargets.push({id: 2549277, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0});
-        }*/
-        
         if(document.location.href.includes(this.targetUrl))
         {
             this.updateAttackLog();
@@ -787,7 +767,7 @@ class ChainTargetsModule extends BaseModule
                 }
                 else
                 {
-                    if(this.compareTargets(lastTargetInOkay, e) > 0)
+                    if(this.compareTargets(lastTargetInOkay, e) > 0 && this.busyTargets.length < this.maxBusy)
                     {
                         this.busyTargets.push(e);
                     }
@@ -1032,9 +1012,16 @@ class ChainTargetsModule extends BaseModule
             [unknownTargetsBody, this.unknownTargets], 
         ];
         
+        okayTargetsBody.parentNode.querySelector("caption").innerHTML = `Top targets (${this.okayTargets.length}/${this.maxOkay})`;
+        busyTargetsBody.parentNode.querySelector("caption").innerHTML = `Waiting targets (${this.busyTargets.length}/${this.maxBusy})`;
+        idleTargetsBody.parentNode.querySelector("caption").innerHTML = `Upcoming targets (${this.idleTargets.length})`;
+        unknownTargetsBody.parentNode.querySelector("caption").innerHTML = `Outdated targets (${this.unknownTargets.length})`;
+        
         for(let [element, targets] of pairs)
         {
             if(element.classList.contains("frozen")){continue;}
+            
+            
             
             let html = "";
             
@@ -1775,7 +1762,7 @@ class SettingsModule extends BaseModule
                     description: `This adds another list below Friends and Enemies, although it's actually more of a tool than just a list. 
                     The idea is that you have a pretty short list of top targets, and as you attack them the list continuously gets backfilled with more targets. 
                     <br/><br/>Every 1.5 seconds it picks a target in the list and refreshes the information about it, exactly <i>which</i> target it picks is a somewhat complicated 
-                    process, but it has the objective of maximizing respect gain.<br/><br/>
+                    process, but it has the objective of maximizing respect gain while still maintaining a steady supply of targets.<br/><br/>
                     To add someone to this list, a new button has been added to all player profiles. It has a picture of a chain, and if the chain is green it means that person is already on your list.`, 
                     settingsHidden: true,
                     settings: 
@@ -1847,7 +1834,8 @@ class SettingsModule extends BaseModule
                     isActive: false, 
                     needsApiKey: true, 
                     description: `This shows your company effectiveness and job points when you hover the job link in the sidebar. 
-                    It will also add a red exclamation point to the link when you drop below the limit you set below.`, 
+                    It will also add a red exclamation point to the link when you drop below the limit you set below.<br/><br/>
+                    The push notification only works with Google Chrome.`, 
                     settingsHidden: true, 
                     settings: 
                     {
@@ -2007,6 +1995,12 @@ class SettingsModule extends BaseModule
         {
             margin-top: 10px;
         }
+        
+        #AquaToolsDescription
+        {
+            width: 400px;
+            margin-bottom: 20px;
+        }
         `);
     }
     
@@ -2027,6 +2021,9 @@ class SettingsModule extends BaseModule
         let html = "";
         
         html += `
+        <p id="AquaToolsDescription">
+            All modules below are developed and tested with Google Chrome, in desktop mode with honor bars turned off. Most/some of them should/could work in other circumstances, it just hasn't been tested properly.
+        <p>
         <table id="SettingsModule">
             <tr>
                 <th class="empty"></th>
