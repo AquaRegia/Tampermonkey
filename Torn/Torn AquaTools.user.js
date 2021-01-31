@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.24
+// @version      1.25
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1848,6 +1848,14 @@ class ListSorterModule extends BaseModule
             valueType: "number"
         };
         
+        this.sortMapper["factions.php"][".members-list .table-header .member-icons"] = 
+        {
+            elementsToSortContainer: ".members-list ul.table-body", 
+            elementContainer: "li[class='table-row']",
+            elementValue: ".member-icons", 
+            valueType: "timeString"
+        };
+        
         this.sortMapper["factions.php"][".members-list .table-header .position"] = 
         {
             elementsToSortContainer: ".members-list ul.table-body", 
@@ -1913,12 +1921,30 @@ class ListSorterModule extends BaseModule
         
         if(mapper.valueType == "number")
         {
-            result = parseInt(result.replace(/[^0-9]/g, ""));
+            result = parseInt(result.replace(/[^0-9]/g, "")) || 0;
         }
         else if(mapper.valueType == "stats")
         {
             result = result.replace(/k/g, "000");
             result = result.split(" / ").reduce((a, b) => a + parseInt(b), 0);
+        }
+        else if(mapper.valueType == "timeString")
+        {
+            if(result)
+            {
+                result = result.replace("s", "");
+                result = result.replace(" ago", "");
+                result = result.replace("second", "1");
+                result = result.replace("minute", "60");
+                result = result.replace("hour", "3600");
+                result = result.replace("day", "86400");
+                result = result.split(" ");
+                result = parseInt(result[0]) * parseInt(result[1]);
+            }
+            else
+            {
+                result = 0;
+            }
         }
 
         return result;
