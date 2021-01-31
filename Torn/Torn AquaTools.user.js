@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.23
+// @version      1.24
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1673,16 +1673,9 @@ class ListSorterModule extends BaseModule
     
     async attachEvents()
     {
-        let successfullyAttached = 0;
-        let matches = Object.entries(this.sortMapper).filter(e => document.location.href.includes(e[0]));
-
-        let keysAvailable = matches.reduce((a, b) => a + Object.keys(b[1]).length, 0);
-        
-        if(keysAvailable == 0){return;}
-        
-        while(successfullyAttached < keysAvailable)
+        while(true)
         {
-            await Utils.sleep(500);
+            await Utils.sleep(1000);
 
             for(let urlMatch of Object.keys(this.sortMapper))
             {
@@ -1691,10 +1684,18 @@ class ListSorterModule extends BaseModule
                 for(let [buttons, mapper] of Object.entries(this.sortMapper[urlMatch]))
                 {
                     let buttonElements = document.querySelectorAll(buttons);
-                    successfullyAttached += buttonElements.length > 0 ? 1 : 0;
-                    
+
                     for(let i = 0; i < buttonElements.length; i++)
                     {
+                        if(buttonElements[i].dataset.isSortable)
+                        {
+                            continue;
+                        }
+                        else
+                        {
+                            buttonElements[i].dataset.isSortable = true;
+                        }
+                        
                         buttonElements[i].style.cursor = "pointer";
                         buttonElements[i].title = "This column is sortable";
                         buttonElements[i].addEventListener("click", () => 
@@ -1745,13 +1746,6 @@ class ListSorterModule extends BaseModule
                 }
             }
         }
-        
-        while(document.querySelector(Object.keys(this.sortMapper[matches[0][0]])[0]).offsetParent != null)
-        {
-            await Utils.sleep(500);
-        }
-        
-        setTimeout(this.attachEvents.bind(this), 50);
     }
     
     initMaps()
@@ -1876,6 +1870,38 @@ class ListSorterModule extends BaseModule
             elementContainer: "li[class='table-row']",
             elementValue: ".status span", 
             valueType: "status"
+        };
+        
+        this.sortMapper["factions.php"]["#option-members-root div[class*='tableHeader___'] div[class*='member___']"] = 
+        {
+            elementsToSortContainer: "#option-members-root div[class*='rowsWrapper']", 
+            elementContainer: "div[class*='rowWrapper___']",
+            elementValue: "span[class*='userName___']", 
+            valueType: "string"
+        };
+        
+        this.sortMapper["factions.php"]["#option-members-root div[class*='tableHeader___'] div[class*='level___']"] = 
+        {
+            elementsToSortContainer: "#option-members-root div[class*='rowsWrapper']", 
+            elementContainer: "div[class*='rowWrapper___']",
+            elementValue: "div[class*='level___']", 
+            valueType: "number"
+        };
+        
+        this.sortMapper["factions.php"]["#option-members-root div[class*='tableHeader___'] div[class*='days___']"] = 
+        {
+            elementsToSortContainer: "#option-members-root div[class*='rowsWrapper']", 
+            elementContainer: "div[class*='rowWrapper___']",
+            elementValue: "div[class*='days___']", 
+            valueType: "number"
+        };
+        
+        this.sortMapper["factions.php"]["#option-members-root div[class*='tableHeader___'] div[class*='position___']"] = 
+        {
+            elementsToSortContainer: "#option-members-root div[class*='rowsWrapper']", 
+            elementContainer: "div[class*='rowWrapper___']",
+            elementValue: "div[class*='position___'] span", 
+            valueType: "string"
         };
         
         Object.values(this.sortMapper).forEach(e => Object.values(e).forEach(e => e.sortDescending = this.sortDescending));
