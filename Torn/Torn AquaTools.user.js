@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.20
+// @version      1.21
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1650,37 +1650,14 @@ class SettingsModule extends BaseModule
 {
     constructor()
     {
-        super("/index.php?page=AquaTools");
+        super("?page=AquaTools");
         
         this.modules = [];
         
         this.svgString = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ff5d22" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>`);
         
-        this.addAjaxListener("sidebarData", false, (json) =>
-        {
-            let newIcons = 
-            {
-                AquaTools: 
-                {
-                    //iconID: "AquaToolsIcon", 
-                    iconID: "icon1",
-                    title: "AquaTools V" + GM_info.script.version, 
-                    subtitle: "Module settings",
-                    link: "/index.php?page=AquaTools"
-                }
-            };
-            
-            Object.entries(json.statusIcons.icons).forEach(([key, value]) => newIcons[key] = value);
-            
-            json.statusIcons.icons = newIcons;
-            
-            if(document.location.href.includes(this.targetUrl))
-            {
-                json.areas.home.status = null;
-            }
-            
-            return json;
-        });
+        this.addAjaxListener("sidebarAjaxAction.php?q=getSidebarData", false, this.sidebarHijacker);
+        this.addAjaxListener("sidebarAjaxAction.php?q=getInformation", false, this.sidebarHijacker);
         
         GM_addStyle(`
         ul[class^='status-icons___'] li:first-child
@@ -1700,7 +1677,7 @@ class SettingsModule extends BaseModule
         document.title = `AquaTools V${GM_info.script.version} Settings | TORN`;
         
         GM_addStyle(`
-        #nav-home > div
+        #sidebarroot .areasWrapper div[id^='nav'][class*='active___'] > div
         {
             background-color: var(--default-bg-panel-color);
             font-weight: unset;
@@ -1716,6 +1693,31 @@ class SettingsModule extends BaseModule
             this.addBody();
             this.addJs();
         });
+    }
+    
+    sidebarHijacker(json)
+    {
+        let newIcons = 
+        {
+            AquaTools: 
+            {
+                iconID: "icon1",
+                title: "AquaTools V" + GM_info.script.version, 
+                subtitle: "Module settings",
+                link: document.location.href.split(".php")[0] + ".php?page=AquaTools"
+            }
+        };
+        
+        Object.entries(json.statusIcons.icons).forEach(([key, value]) => newIcons[key] = value);
+        
+        json.statusIcons.icons = newIcons;
+
+        if(document.location.href.includes(this.targetUrl))
+        {
+            json.areas.forEach(e => e.status = null);
+        }
+        
+        return json;
     }
     
     initModules()
