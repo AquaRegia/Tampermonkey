@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.22
+// @version      1.23
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1654,6 +1654,251 @@ class CompanyEffectivenessModule extends BaseModule
     }
 }
 
+class ListSorterModule extends BaseModule
+{
+    constructor(sortOrder)
+    {
+        super("");
+        
+        this.sortDescending = sortOrder == "Descending";
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        this.initMaps();
+        this.attachEvents();
+    }
+    
+    async attachEvents()
+    {
+        let successfullyAttached = 0;
+        let matches = Object.entries(this.sortMapper).filter(e => document.location.href.includes(e[0]));
+
+        let keysAvailable = matches.reduce((a, b) => a + Object.keys(b[1]).length, 0);
+        
+        if(keysAvailable == 0){return;}
+        
+        while(successfullyAttached < keysAvailable)
+        {
+            await Utils.sleep(500);
+
+            for(let urlMatch of Object.keys(this.sortMapper))
+            {
+                if(!document.location.href.includes(urlMatch)){continue;}
+                
+                for(let [buttons, mapper] of Object.entries(this.sortMapper[urlMatch]))
+                {
+                    let buttonElements = document.querySelectorAll(buttons);
+                    successfullyAttached += buttonElements.length > 0 ? 1 : 0;
+                    
+                    for(let i = 0; i < buttonElements.length; i++)
+                    {
+                        buttonElements[i].style.cursor = "pointer";
+                        buttonElements[i].title = "This column is sortable";
+                        buttonElements[i].addEventListener("click", () => 
+                        {
+                            let elementList = document.querySelectorAll(mapper.elementsToSortContainer)[i].querySelectorAll(mapper.elementContainer);
+                            
+                            let sortedElementList = Array.from(elementList).sort((a,b) => 
+                            {
+                                let aValue = this.getValueFromElement(a, mapper);
+                                let bValue = this.getValueFromElement(b, mapper);
+                                let result;
+                                
+                                if(mapper.valueType == "number" || mapper.valueType == "stats")
+                                {
+                                    result = bValue - aValue;
+                                }
+                                else if(mapper.valueType == "status")
+                                {
+                                    if(aValue == "okay" && bValue != "okay")
+                                    {
+                                        result = -1;
+                                    }
+                                    else if(aValue != "okay" && bValue == "okay")
+                                    {
+                                        result = 1;
+                                    }
+                                    else
+                                    {
+                                        result = aValue == bValue ? 0 : (aValue > bValue ? -1 : 1);
+                                    }
+                                }
+                                else
+                                {
+                                    result = aValue == bValue ? 0 : (aValue > bValue ? -1 : 1);
+                                }
+                                
+                                return mapper.sortDescending ? result : -result;
+                            });
+                            
+                            mapper.sortDescending = !mapper.sortDescending;
+                            
+                            sortedElementList.forEach(e => 
+                            {
+                                e.parentNode.appendChild(e);
+                            });
+                        });
+                    }
+                }
+            }
+        }
+        
+        while(document.querySelector(Object.keys(this.sortMapper[matches[0][0]])[0]).offsetParent != null)
+        {
+            await Utils.sleep(500);
+        }
+        
+        setTimeout(this.attachEvents.bind(this), 50);
+    }
+    
+    initMaps()
+    {
+        this.sortMapper = 
+        {
+            "friendlist.php": {},
+            "blacklist.php": {},
+            "companies.php": {},
+            "factions.php": {},
+        };
+
+        this.sortMapper["friendlist.php"][".users-list-title > .title"] = 
+        {
+            elementsToSortContainer: ".users-list-title ~ ul", 
+            elementContainer: "li[data-id]",
+            elementValue: "a.user.name span", 
+            valueType: "string"
+        };
+        
+        this.sortMapper["friendlist.php"][".users-list-title > .level"] = 
+        {
+            elementsToSortContainer: ".users-list-title ~ ul", 
+            elementContainer: "li[data-id]",
+            elementValue: "div.level", 
+            valueType: "number"
+        };
+        
+        this.sortMapper["friendlist.php"][".users-list-title > .status"] = 
+        {
+            elementsToSortContainer: ".users-list-title ~ ul", 
+            elementContainer: "li[data-id]",
+            elementValue: "div.status span:last-child", 
+            valueType: "status"
+        };
+        
+        this.sortMapper["friendlist.php"][".users-list-title > .description"] = 
+        {
+            elementsToSortContainer: ".users-list-title ~ ul", 
+            elementContainer: "li[data-id]",
+            elementValue: "div.description div.text", 
+            valueType: "string"
+        };
+        
+        this.sortMapper["blacklist.php"] = this.sortMapper["friendlist.php"];
+
+        this.sortMapper["companies.php"][".employee-list-title > .employee"] = 
+        {
+            elementsToSortContainer: ".employee-list-title ~ ul", 
+            elementContainer: "li[data-user]",
+            elementValue: ".acc-header .user.name span", 
+            valueType: "string"
+        };
+        
+        this.sortMapper["companies.php"][".employee-list-title > .effectiveness"] = 
+        {
+            elementsToSortContainer: ".employee-list-title ~ ul", 
+            elementContainer: "li[data-user]",
+            elementValue: "p.effectiveness-value", 
+            valueType: "number"
+        };
+        
+        this.sortMapper["companies.php"][".employee-list-title > .stats"] = 
+        {
+            elementsToSortContainer: ".employee-list-title ~ ul", 
+            elementContainer: "li[data-user]",
+            elementValue: ".acc-body > .stats", 
+            valueType: "stats"
+        };
+        
+        this.sortMapper["companies.php"][".employee-list-title > .days"] = 
+        {
+            elementsToSortContainer: ".employee-list-title ~ ul", 
+            elementContainer: "li[data-user]",
+            elementValue: ".acc-body > .days", 
+            valueType: "number"
+        };
+        
+        this.sortMapper["companies.php"][".employee-list-title > .rank"] = 
+        {
+            elementsToSortContainer: ".employee-list-title ~ ul", 
+            elementContainer: "li[data-user]",
+            elementValue: ".acc-body .ui-selectmenu-status", 
+            valueType: "string"
+        };
+
+        this.sortMapper["factions.php"][".members-list .table-header .member"] = 
+        {
+            elementsToSortContainer: ".members-list ul.table-body", 
+            elementContainer: "li[class='table-row']",
+            elementValue: ".member a.user.name", 
+            valueType: "string"
+        };
+        
+        this.sortMapper["factions.php"][".members-list .table-header .lvl"] = 
+        {
+            elementsToSortContainer: ".members-list ul.table-body", 
+            elementContainer: "li[class='table-row']",
+            elementValue: ".lvl", 
+            valueType: "number"
+        };
+        
+        this.sortMapper["factions.php"][".members-list .table-header .position"] = 
+        {
+            elementsToSortContainer: ".members-list ul.table-body", 
+            elementContainer: "li[class='table-row']",
+            elementValue: ".position span", 
+            valueType: "string"
+        };
+        
+        this.sortMapper["factions.php"][".members-list .table-header .days"] = 
+        {
+            elementsToSortContainer: ".members-list ul.table-body", 
+            elementContainer: "li[class='table-row']",
+            elementValue: ".days", 
+            valueType: "number"
+        };
+        
+        this.sortMapper["factions.php"][".members-list .table-header .status"] = 
+        {
+            elementsToSortContainer: ".members-list ul.table-body", 
+            elementContainer: "li[class='table-row']",
+            elementValue: ".status span", 
+            valueType: "status"
+        };
+        
+        Object.values(this.sortMapper).forEach(e => Object.values(e).forEach(e => e.sortDescending = this.sortDescending));
+    }
+    
+    getValueFromElement(element, mapper)
+    {
+        let result = element.querySelector(mapper.elementValue).innerText.toLowerCase();
+        
+        if(mapper.valueType == "number")
+        {
+            result = parseInt(result.replace(/[^0-9]/g, ""));
+        }
+        else if(mapper.valueType == "stats")
+        {
+            result = result.replace(/k/g, "000");
+            result = result.split(" / ").reduce((a, b) => a + parseInt(b), 0);
+        }
+
+        return result;
+    }
+}
+
 class SettingsModule extends BaseModule
 {
     constructor()
@@ -1747,6 +1992,7 @@ class SettingsModule extends BaseModule
                 if(name == "Chain_Targets"){classRef = ChainTargetsModule}
                 if(name == "City_Finds"){classRef = CityFindsModule}
                 if(name == "Company_Effectiveness"){classRef = CompanyEffectivenessModule}
+                if(name == "List_Sorter"){classRef = ListSorterModule}
                 
                 if(classRef)
                 {
@@ -1799,7 +2045,10 @@ class SettingsModule extends BaseModule
                     it hasn't seen all items in the bazaar, and you can enable it by scrolling down to the bottom. After that 
                     it should be green, and will work exactly like the other sorting buttons.`, 
                     settingsHidden: true, 
-                    settings: {}
+                    settings: 
+                    {
+                        
+                    }
                 }, 
                 Chain_Targets:
                 {
@@ -1916,6 +2165,24 @@ class SettingsModule extends BaseModule
                             description: "When fetching the API for your company information, it'll use cached values if they're no older than this (in seconds)"
                         }
                     }
+                },
+                List_Sorter:
+                {
+                    isActive: false, 
+                    needsApiKey: false, 
+                    description: `This makes some of the tables all around Torn sortable. Click a column header to sort, click again to sort in reverse order.<br/><br/>
+                    The sort algorithm is stable, meaning if you first sort by column A, then by column B, all rows with the same value in column B will be sorted by column A.`, 
+                    settingsHidden: true, 
+                    settings: 
+                    {
+                        Sort_order:
+                        {
+                            value: "Descending", 
+                            valueType: "list", 
+                            possibleValues: ["Ascending", "Descending"], 
+                            description: "This is the sort order of the first click"
+                        }
+                    }
                 }
             }
         };
@@ -1997,6 +2264,16 @@ class SettingsModule extends BaseModule
             border-right: none;
         }
         
+        #SettingsModule th
+        {
+            background-color: #EEE;
+        }
+        
+        #SettingsModule tr.module ~ tr
+        {
+            background-color: #CCC;
+        }
+        
         #SettingsModule .hidden
         {
             display: none;
@@ -2013,6 +2290,7 @@ class SettingsModule extends BaseModule
             font-size: 14px;
             text-align: center;
             font-weight: 600;
+            background-color: #DDD;
         }
         
         #SettingsModule ul
