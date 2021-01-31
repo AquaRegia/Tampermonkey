@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.21
+// @version      1.22
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -275,8 +275,8 @@ class ApiModule
 
 class BaseModule
 {
-    static _ajaxModule = new AjaxModule();
-    static _apiModule = new ApiModule();
+    //static _ajaxModule = new AjaxModule();
+    //static _apiModule = new ApiModule();
     
     constructor(targetUrl)
     {
@@ -359,6 +359,8 @@ class BaseModule
         }).observe(document, {childList: true, subtree: true});
     }
 }
+Object.defineProperty(BaseModule, "_ajaxModule", {value: new AjaxModule()})
+Object.defineProperty(BaseModule, "_apiModule", {value: new ApiModule()})
 
 class BazaarSorterModule extends BaseModule
 {
@@ -655,7 +657,6 @@ class ChainTargetsModule extends BaseModule
                 this.addBody();
                 this.addJs();
                 this.updateTarget();
-                setInterval(this.updateTarget.bind(this), 1500);
             }
             else
             {
@@ -876,6 +877,8 @@ class ChainTargetsModule extends BaseModule
         localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
         
         this.updateTableBody();
+        
+        setTimeout(this.updateTarget.bind(this), 1500);
     }
     
     addStyle()
@@ -1574,7 +1577,12 @@ class CompanyEffectivenessModule extends BaseModule
             }
         }
 
-        document.querySelector(".effectivenessLink div").innerHTML = result;
+        let div = document.querySelector(".effectivenessLink div");
+        
+        if(div)
+        {
+            div.innerHTML = result;
+        }
     }
     
     colorize(value, isTotal)
@@ -1656,9 +1664,6 @@ class SettingsModule extends BaseModule
         
         this.svgString = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ff5d22" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>`);
         
-        this.addAjaxListener("sidebarAjaxAction.php?q=getSidebarData", false, this.sidebarHijacker);
-        this.addAjaxListener("sidebarAjaxAction.php?q=getInformation", false, this.sidebarHijacker);
-        
         GM_addStyle(`
         ul[class^='status-icons___'] li:first-child
         {
@@ -1693,10 +1698,22 @@ class SettingsModule extends BaseModule
             this.addBody();
             this.addJs();
         });
+        
+        this.addAjaxListener("getSidebarData", false, json => 
+        {
+            Object.values(json.areas).forEach(e => e.status = null);
+            return json;
+        });
     }
     
     sidebarHijacker(json)
     {
+        let now = Date.now();
+
+        let url = "/index.php";
+        if((this.user.data.hospitalStamp*1000) > now){url = "/hospitalview.php"}
+        if((this.user.data.jailStamp*1000) > now){url = "/jailview.php"}
+        
         let newIcons = 
         {
             AquaTools: 
@@ -1704,7 +1721,7 @@ class SettingsModule extends BaseModule
                 iconID: "icon1",
                 title: "AquaTools V" + GM_info.script.version, 
                 subtitle: "Module settings",
-                link: document.location.href.split(".php")[0] + ".php?page=AquaTools"
+                link: url + "?page=AquaTools"
             }
         };
         
@@ -1712,11 +1729,6 @@ class SettingsModule extends BaseModule
         
         json.statusIcons.icons = newIcons;
 
-        if(document.location.href.includes(this.targetUrl))
-        {
-            json.areas.forEach(e => e.status = null);
-        }
-        
         return json;
     }
     
@@ -1773,7 +1785,8 @@ class SettingsModule extends BaseModule
                         {
                             value: 50, 
                             valueType: "number", 
-                            description: "How many API requests to allow within 1 minute, before introducing a 1.5 second delay between requests"
+                            description: `How many API requests to allow within 1 minute, before introducing a 1.5 second delay between requests. 
+                            There will always be a 7.5 second delay if there are 90+ requests within the last minute, regardless of this setting`
                         }
                     }
                 }, 
@@ -1942,6 +1955,12 @@ class SettingsModule extends BaseModule
         }
         
         this.saveSettings();
+    }
+    
+    onUserLoaded()
+    {
+        this.addAjaxListener("sidebarAjaxAction.php?q=getSidebarData", false, this.sidebarHijacker.bind(this));
+        this.addAjaxListener("sidebarAjaxAction.php?q=getInformation", false, this.sidebarHijacker.bind(this));
     }
     
     addStyle()
