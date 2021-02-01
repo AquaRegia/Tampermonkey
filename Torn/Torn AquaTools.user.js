@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.25
+// @version      1.26
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -84,6 +84,11 @@ class Utils
         seconds -= minutes*60;
 
         return "[" + (hours < 10 ? "0" : "") + hours + ":" + (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds + "]";
+    }
+    
+    static getMonthName(month)
+    {
+        return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][month-1];
     }
 }
 
@@ -1951,6 +1956,80 @@ class ListSorterModule extends BaseModule
     }
 }
 
+class VaultSharingModule extends BaseModule
+{
+    constructor(startTime)
+    {
+        super("/properties.php");
+        
+        this.startTime = new Date(Date.UTC(...startTime.replace("T", "-").replace(/:/g, "-").split("-").map((e, i) => i == 1 ? parseInt(e)-1 : parseInt(e))));
+        this.transactionData = {};
+        this.knownTransactions = 0;
+        this.lastKnownTransactions = 0;
+        
+        this.ready();
+    }
+    
+    async init()
+    {
+        let transactions;
+
+        while((transactions = document.querySelectorAll("li[transaction_id]")).length == 0)
+        {
+            await Utils.sleep(500);
+        }
+
+        transactions.forEach((transaction, index) => 
+        {
+            if(transaction.dataset.captured){return;}
+
+            let date = transaction.querySelector(".transaction-date").innerText.trim().split("/");
+            let time = transaction.querySelector(".transaction-time").innerText.trim();
+            let datetime = new Date(Date.parse(date[0] + " " + Utils.getMonthName(parseInt(date[1])) + " " + date[2] + " " + time + " UTC"));
+            let name = transaction.querySelector(".user.name").innerText.replace(/[^A-z0-9]/g, "");
+            let type = transaction.querySelector(".type").innerText.replace(/[^A-z]/g, "");
+            let amount = transaction.querySelector(".amount").innerText.replace(/[^0-9]/g, "");
+            let balance = transaction.querySelector(".balance").innerText.replace(/[^0-9]/g, "");
+            
+            this.knownTransactions++;
+            transaction.dataset.captured = true;
+
+            this.transactionData[transaction.getAttribute("transaction_id")] = {datetime: datetime, name: name, type: type, amount: amount, originalBalance: balance};
+        });
+        
+        if(this.knownTransactions > this.lastKnownTransactions && Object.values(this.transactionData).filter(e => e.datetime < this.startTime).length > 0)
+        {
+            this.calculateBalances();
+        }
+        
+        this.lastKnownTransactions = this.knownTransactions;
+
+        setTimeout(this.init.bind(this), 500);
+    }
+
+    calculateBalances()
+    {
+        let balances = {};
+
+        for(let [id, transaction] of Object.entries(this.transactionData).filter(e => e[1].datetime >= this.startTime).sort((a, b) => a[1].datetime - b[1].datetime))
+        {
+            if(!balances.hasOwnProperty(transaction.name))
+            {
+                balances[transaction.name] = 0;
+            }
+            
+            balances[transaction.name] += parseInt(transaction.type == "Deposit" ? transaction.amount : -transaction.amount);
+            
+            let transactionElement = document.querySelector(`li[transaction_id="${id}"] .balance`);
+            let originalBalance = parseInt(transaction.originalBalance);
+            
+            transactionElement.style.color = "var(--default-blue-color";
+            transactionElement.title = "Total: $" + originalBalance.toLocaleString();
+            transactionElement.innerHTML = (balances[transaction.name] < 0 ? "-" : "") + "$" + Math.abs(balances[transaction.name]).toLocaleString();
+        }
+    }
+}
+
 class SettingsModule extends BaseModule
 {
     constructor()
@@ -2045,6 +2124,7 @@ class SettingsModule extends BaseModule
                 if(name == "City_Finds"){classRef = CityFindsModule}
                 if(name == "Company_Effectiveness"){classRef = CompanyEffectivenessModule}
                 if(name == "List_Sorter"){classRef = ListSorterModule}
+                if(name == "Vault_Sharing"){classRef = VaultSharingModule}
                 
                 if(classRef)
                 {
@@ -2235,6 +2315,25 @@ class SettingsModule extends BaseModule
                             description: "This is the sort order of the first click"
                         }
                     }
+                },
+                Vault_Sharing:
+                {
+                    isActive: false, 
+                    needsApiKey: false, 
+                    description: `Keeps track of the personal balances in a property vault. 
+                    The personal balance is shown with blue text, to indicate it's been modified, however the text can be hovered to show the actual balance.
+                    <br/><br/>If no blue balance is shown, it could be because the start date set below is outside the range of your transactions. 
+                    It could also be because you haven't scrolled down far enough to load all relevant transactions.`, 
+                    settingsHidden: true, 
+                    settings: 
+                    {
+                        Start_date:
+                        {
+                            value: "2020-01-01T00:00", 
+                            valueType: "datetime", 
+                            description: "This sets the starting point of when all users' balances are assumed to be $0"
+                        }
+                    }
                 }
             }
         };
@@ -2370,7 +2469,7 @@ class SettingsModule extends BaseModule
         #SettingsModule input:not([type='checkbox']), #SettingsModule select
         {
             box-sizing: border-box;
-            width: 150px;
+            width: 180px;
         }
         
         #saveSettings, #resetSettings
@@ -2459,6 +2558,10 @@ class SettingsModule extends BaseModule
                         }
                         
                         html += "</select>";
+                    }
+                    else if(setting.valueType == "datetime")
+                    {
+                        html += `<input type="datetime-local" value="${setting.value}"/>`;
                     }
                     
                     html += " " + settingName.replace(/\_/g, " ");
