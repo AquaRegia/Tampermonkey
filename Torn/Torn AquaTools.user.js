@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.26
+// @version      1.27
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1100,7 +1100,7 @@ class ChainTargetsModule extends BaseModule
                 }
                 
                 html += "</td>";
-                html += `<td style="text-align: center"><span class="paddedTime">${String(parseInt((now - user.lastUpdate)/1000)).padLeft(4, String.fromCharCode(160))}</span> seconds ago</td>`;
+                html += `<td style="text-align: center"><span class="paddedTime">${String(parseInt((now - user.lastUpdate)/1000)).padStart(4, String.fromCharCode(160))}</span> seconds ago</td>`;
                 
                 html += "</td></tr>";
             }
@@ -1659,6 +1659,119 @@ class CompanyEffectivenessModule extends BaseModule
     }
 }
 
+class EloCalculatorModule extends BaseModule
+{
+    constructor()
+    {
+        super("sid=attack&user2ID=");
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        this.addStyle();
+        this.attachEloDiv();
+    }
+    
+    addStyle()
+    {
+        GM_addStyle(`
+        #eloContainer
+        {
+            text-align: right;
+        }
+        
+        .numberContainer
+        {
+            font-weight: 600;
+            font-family: Courier New;
+        }
+        `);
+    }
+    
+    padValue(value, length)
+    {
+        return String(value).padStart(length, String.fromCharCode(160));
+    }
+    
+    async attachEloDiv()
+    {
+        let div = document.createElement("div");
+        div.id = "eloContainer";
+        div.style.textAlign = "right";
+        
+        let dialogButton;
+        
+        this.opponentId = document.location.href.split("user2ID=")[1];
+        
+        this.myElo = (await this.api(`/user/?selections=personalstats`, 0)).personalstats.elo;
+        this.opponentElo = (await this.api(`/user/${this.opponentId}?selections=personalstats`, 0)).personalstats.elo;
+        
+        while(true)
+        {
+            dialogButton = document.querySelector("[class*='dialogButtons___'] button");
+
+            if(dialogButton && dialogButton.innerText == "START FIGHT")
+            {
+                break;
+            }
+            
+            await Utils.sleep(500);
+        }
+        
+        this.opponentName = document.querySelector("#defender").querySelector("[class*='userName___']").innerText;
+        
+        div.innerHTML = `
+        Your Elo: <span class="numberContainer">${this.padValue(this.myElo, 6)}</span><br/>
+        ${this.opponentName}'s Elo: <span class="numberContainer">${this.padValue(this.opponentElo, 6)}</span><br/>
+        Win %: <span class="numberContainer">${this.padValue((this.calculateScore(this.myElo, this.opponentElo)*100).toFixed(2), 6)}</span>
+        `;
+        
+        dialogButton.before(div);
+        
+        this.attachEloChangeDiv();
+    }
+    
+    async attachEloChangeDiv()
+    {
+        let div = document.createElement("div");
+        div.id = "eloContainer";
+        div.style.textAlign = "right";
+        
+        let dialogButton;
+        
+        while(true)
+        {
+            dialogButton = document.querySelector("[class*='dialogButtons___'] button");
+            
+            if(dialogButton && dialogButton.innerText == "CONTINUE")
+            {
+                break;
+            }
+            
+            await Utils.sleep(500);
+        }
+        
+        let myNewElo = (await this.api(`/user/?selections=personalstats`, 0)).personalstats.elo;
+        let opponentNewElo = (await this.api(`/user/${this.opponentId}?selections=personalstats`, 0)).personalstats.elo;
+        
+        this.log(myNewElo, opponentNewElo);
+        
+        div.innerHTML = `
+        Your Elo: <span class="numberContainer">${this.padValue(myNewElo, 6)} (${this.padValue((myNewElo >= this.myElo ? "+" : "-") + Math.abs(myNewElo - this.myElo), 3)})</span><br/>
+        ${this.opponentName}'s Elo: <span class="numberContainer">${this.padValue(opponentNewElo, 6)} (${this.padValue((opponentNewElo >= this.opponentElo ? "+" : "-") + Math.abs(opponentNewElo - this.opponentElo), 3)})</span><br/>
+        `;
+        
+        dialogButton.before(div);
+    }
+    
+    calculateScore(myElo, opponentElo)
+    {
+        return 1 / (1 + Math.pow(10, (opponentElo-myElo)/400));
+    }
+}
+
 class ListSorterModule extends BaseModule
 {
     constructor(sortOrder)
@@ -2041,7 +2154,7 @@ class SettingsModule extends BaseModule
         this.svgString = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ff5d22" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>`);
         
         GM_addStyle(`
-        ul[class^='status-icons___'] li:first-child
+        ul[class^='status-icons___'] li:first-child#icon1-sidebar
         {
             background-image: url("data:image/svg+xml;base64,${this.svgString}");
         }
@@ -2123,6 +2236,7 @@ class SettingsModule extends BaseModule
                 if(name == "Chain_Targets"){classRef = ChainTargetsModule}
                 if(name == "City_Finds"){classRef = CityFindsModule}
                 if(name == "Company_Effectiveness"){classRef = CompanyEffectivenessModule}
+                if(name == "Elo_Calculator"){classRef = EloCalculatorModule}
                 if(name == "List_Sorter"){classRef = ListSorterModule}
                 if(name == "Vault_Sharing"){classRef = VaultSharingModule}
                 
@@ -2298,6 +2412,15 @@ class SettingsModule extends BaseModule
                         }
                     }
                 },
+                Elo_Calculator: 
+                {
+                    isActive: false, 
+                    needsApiKey: true, 
+                    description: `This shows your estimated chance to win a fight before the fight starts, based on your and your opponent's Elo rating. 
+                    After the fight is over it also shows your new Elo ratings, and how they changed.`, 
+                    settingsHidden: true, 
+                    settings: {}
+                },
                 List_Sorter:
                 {
                     isActive: false, 
@@ -2320,7 +2443,7 @@ class SettingsModule extends BaseModule
                 {
                     isActive: false, 
                     needsApiKey: false, 
-                    description: `Keeps track of the personal balances in a property vault. 
+                    description: `This keeps track of the personal balances in a property vault. 
                     The personal balance is shown with blue text, to indicate it's been modified, however the text can be hovered to show the actual balance.
                     <br/><br/>If no blue balance is shown, it could be because the start date set below is outside the range of your transactions. 
                     It could also be because you haven't scrolled down far enough to load all relevant transactions.`, 
