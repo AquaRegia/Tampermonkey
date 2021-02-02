@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.27
+// @version      1.28
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -2071,16 +2071,17 @@ class ListSorterModule extends BaseModule
 
 class VaultSharingModule extends BaseModule
 {
-    constructor(startTime)
+    constructor(startTime, myBalance, spouseBalance)
     {
         super("/properties.php");
         
         this.startTime = new Date(Date.UTC(...startTime.replace("T", "-").replace(/:/g, "-").split("-").map((e, i) => i == 1 ? parseInt(e)-1 : parseInt(e))));
+        this.myBalance = myBalance;
+        this.spouseBalance = spouseBalance;
+        
         this.transactionData = {};
         this.knownTransactions = 0;
         this.lastKnownTransactions = 0;
-        
-        this.ready();
     }
     
     async init()
@@ -2099,7 +2100,9 @@ class VaultSharingModule extends BaseModule
             let date = transaction.querySelector(".transaction-date").innerText.trim().split("/");
             let time = transaction.querySelector(".transaction-time").innerText.trim();
             let datetime = new Date(Date.parse(date[0] + " " + Utils.getMonthName(parseInt(date[1])) + " " + date[2] + " " + time + " UTC"));
-            let name = transaction.querySelector(".user.name").innerText.replace(/[^A-z0-9]/g, "");
+            let userLink = transaction.querySelector(".user.name");
+            let userId = parseInt(userLink.href.split("XID=")[1]);
+            let name = userLink.innerText.replace(/[^A-z0-9]/g, "");
             let type = transaction.querySelector(".type").innerText.replace(/[^A-z]/g, "");
             let amount = transaction.querySelector(".amount").innerText.replace(/[^0-9]/g, "");
             let balance = transaction.querySelector(".balance").innerText.replace(/[^0-9]/g, "");
@@ -2107,7 +2110,7 @@ class VaultSharingModule extends BaseModule
             this.knownTransactions++;
             transaction.dataset.captured = true;
 
-            this.transactionData[transaction.getAttribute("transaction_id")] = {datetime: datetime, name: name, type: type, amount: amount, originalBalance: balance};
+            this.transactionData[transaction.getAttribute("transaction_id")] = {datetime: datetime, name: name, userId: userId, type: type, amount: amount, originalBalance: balance};
         });
         
         if(this.knownTransactions > this.lastKnownTransactions && Object.values(this.transactionData).filter(e => e.datetime < this.startTime).length > 0)
@@ -2128,7 +2131,7 @@ class VaultSharingModule extends BaseModule
         {
             if(!balances.hasOwnProperty(transaction.name))
             {
-                balances[transaction.name] = 0;
+                balances[transaction.name] = transaction.userId == this.myId ? this.myBalance : this.spouseBalance;
             }
             
             balances[transaction.name] += parseInt(transaction.type == "Deposit" ? transaction.amount : -transaction.amount);
@@ -2140,6 +2143,12 @@ class VaultSharingModule extends BaseModule
             transactionElement.title = "Total: $" + originalBalance.toLocaleString();
             transactionElement.innerHTML = (balances[transaction.name] < 0 ? "-" : "") + "$" + Math.abs(balances[transaction.name]).toLocaleString();
         }
+    }
+    
+    onUserLoaded()
+    {
+        this.myId = this.user.data.userID;
+        this.ready();
     }
 }
 
@@ -2455,6 +2464,18 @@ class SettingsModule extends BaseModule
                             value: "2020-01-01T00:00", 
                             valueType: "datetime", 
                             description: "This sets the starting point of when all users' balances are assumed to be $0"
+                        }, 
+                        My_start_balance: 
+                        {
+                            value: 0, 
+                            valueType: "number",
+                            description: "All calculations done will assume that this was your current balance at the time set above"
+                        }, 
+                        Spouse_start_balance: 
+                        {
+                            value: 0, 
+                            valueType: "number",
+                            description: "All calculations done will assume that this was your spouse's current balance at the time set above"
                         }
                     }
                 }
@@ -2515,8 +2536,8 @@ class SettingsModule extends BaseModule
         #SettingsModule
         {
             border-collapse: collapse;
-            min-width: 400px;
-            max-width: 400px;
+            min-width: 450px;
+            max-width: 450px;
         }
         
         #SettingsModule th, #SettingsModule td
@@ -2659,7 +2680,7 @@ class SettingsModule extends BaseModule
                     
                     if(setting.valueType == "number")
                     {
-                        html += `<input type="number" value="${setting.value}"/>`;
+                        html += `<input type="text" class="numberValue" value="${parseInt(setting.value).toLocaleString()}"/>`;
                     }
                     else if(setting.valueType == "boolean")
                     {
@@ -2753,6 +2774,14 @@ class SettingsModule extends BaseModule
                 document.location.reload();
             }
         });
+        
+        document.querySelectorAll("#SettingsModule input[class*='numberValue']").forEach(e => 
+        {
+            e.addEventListener("keyup", () => 
+            {
+                e.value = (parseInt(e.value.replace(/[^\-0-9]/g, "")) || 0).toLocaleString();
+            });
+        });
     }
 
     saveSettings()
@@ -2780,6 +2809,11 @@ class SettingsModule extends BaseModule
             {
                 let settingName = li.className;
                 let settingValue = li.querySelector("input, select").value;
+                
+                if(this.settings.modules[moduleName].settings[settingName].valueType == "number")
+                {
+                    settingValue = parseInt(settingValue.replace(/[^\-0-9]/g, ""));
+                }
                 
                 this.settings.modules[moduleName].settings[settingName].value = settingValue;
             });
