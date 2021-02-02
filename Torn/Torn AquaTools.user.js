@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.28
+// @version      1.29
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -2103,6 +2103,10 @@ class VaultSharingModule extends BaseModule
             let userLink = transaction.querySelector(".user.name");
             let userId = parseInt(userLink.href.split("XID=")[1]);
             let name = userLink.innerText.replace(/[^A-z0-9]/g, "");
+            if(!name)
+            {
+                name = userLink.children[0].title.split(" ")[0];
+            }
             let type = transaction.querySelector(".type").innerText.replace(/[^A-z]/g, "");
             let amount = transaction.querySelector(".amount").innerText.replace(/[^0-9]/g, "");
             let balance = transaction.querySelector(".balance").innerText.replace(/[^0-9]/g, "");
