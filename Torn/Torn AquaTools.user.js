@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.31
+// @version      1.32
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1825,6 +1825,117 @@ class EloCalculatorModule extends BaseModule
     }
 }
 
+class EntityFilterModule extends BaseModule
+{
+    constructor(crimeSelection, gymStatSelection)
+    {
+        super("");
+        
+        this.location = document.location.href;
+        this.crimeSelection = crimeSelection;
+        this.gymStatSelection = gymStatSelection;
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        if(this.location.includes("/crimes.php"))
+        {
+            this.hideCrimes();
+        }
+        else if(this.location.includes("/gym.php"))
+        {
+            this.hideGymStats();
+        }
+    }
+    
+    hideCrimes()
+    {
+        if(this.crimeSelection == "All")
+        {
+            return;
+        }
+        else if(this.crimeSelection == "None")
+        {
+            GM_addStyle(`
+            form[name='crimes']
+            {
+                display: none;
+            }
+            `);
+        }
+        else
+        {
+            let crimes = JSON.parse(localStorage.getItem("AquaTools_settings")).modules["Entity_Filter"].settings["Show_crimes"].possibleValues.slice(2);
+            
+            let main = this.crimeSelection.split(": ")[0];
+            let sub = this.crimeSelection.split(": ")[1];
+            
+            let crimeTypes = Array.from(new Set(crimes.map(e => e.split(": ")[0])));
+            let subCrimes = crimes.filter(e => e.includes(main + ": ")).map(e => e.split(": ")[1]);
+            
+            GM_addStyle(`
+            form[name='crimes'] > ul > li
+            {
+                display: none;
+            }
+            
+            form[name='crimes'][action$='docrime'] > ul > li:nth-child(${crimeTypes.indexOf(main) + 1})
+            {
+                display: list-item;
+            }
+            
+            form[name='crimes']:not([action$='docrime']) > ul > li:nth-child(${subCrimes.indexOf(sub) + 1})
+            {
+                display: list-item;
+            }
+            `);
+        }
+    }
+    
+    hideGymStats()
+    {
+        if(this.gymStatSelection == "All")
+        {
+            return;
+        }
+        else if(this.gymStatSelection == "None")
+        {
+            GM_addStyle(`
+            div[class*='gymContentWrapper___']
+            {
+                display: none;
+            }
+            `);
+        }
+        else
+        {
+            GM_addStyle(`
+            ul[class*='properties___'] > li
+            {
+                display: none;
+            }
+            
+            ul[class*='properties___'] > li[class*='${this.gymStatSelection.toLowerCase()}']
+            {
+                display: list-item;
+                width: calc(100% + 2px);
+            }
+            
+            @media screen and (max-width: 1000px)
+            {
+                ul[class*='properties___'] > li[class*='${this.gymStatSelection.toLowerCase()}']
+                {
+                    display: list-item;
+                    width: 100% !important;
+                }
+            }
+            `);
+        }
+    }
+}
+
 class ListSorterModule extends BaseModule
 {
     constructor(sortOrder)
@@ -2303,6 +2414,7 @@ class SettingsModule extends BaseModule
                 if(name == "City_Finds"){classRef = CityFindsModule}
                 if(name == "Company_Effectiveness"){classRef = CompanyEffectivenessModule}
                 if(name == "Elo_Calculator"){classRef = EloCalculatorModule}
+                if(name == "Entity_Filter"){classRef = EntityFilterModule}
                 if(name == "List_Sorter"){classRef = ListSorterModule}
                 if(name == "Vault_Sharing"){classRef = VaultSharingModule}
                 
@@ -2486,6 +2598,112 @@ class SettingsModule extends BaseModule
                     After the fight is over it also shows your new Elo ratings, and how they changed.`, 
                     settingsHidden: true, 
                     settings: {}
+                },
+                Entity_Filter:
+                {
+                    isActive: false, 
+                    needsApiKey: false, 
+                    description: `This lets you hide various things all around Torn. Useful when you don't want to accidentally do the wrong crime or train the wrong stat.`,
+                    settingsHidden: true, 
+                    settings: 
+                    {
+                        Show_crimes:
+                        {
+                            value: "All", 
+                            valueType: "list", 
+                            possibleValues: 
+                            [
+                                "All",
+                                "None",
+                                "Search for Cash: Search the Train Station",
+                                "Search for Cash: Search Under the Old Bridge",
+                                "Search for Cash: Search the Bins",
+                                "Search for Cash: Search the Water Fountain",
+                                "Search for Cash: Search the Dumpsters",
+                                "Search for Cash: Search the Movie Theater",
+                                "Sell Copied Media: Rock CDs",
+                                "Sell Copied Media: Heavy Metal CDs",
+                                "Sell Copied Media: Pop CDs",
+                                "Sell Copied Media: Rap CDs",
+                                "Sell Copied Media: Reggae CDs",
+                                "Sell Copied Media: Horror DVDs",
+                                "Sell Copied Media: Action DVDs",
+                                "Sell Copied Media: Romance DVDs",
+                                "Sell Copied Media: Sci Fi DVDs",
+                                "Sell Copied Media: Thriller DVDs",
+                                "Shoplift: Sweet Shop",
+                                "Shoplift: Market Stall",
+                                "Shoplift: Clothes Shop",
+                                "Shoplift: Jewelry Shop",
+                                "Pickpocket Someone: Hobo",
+                                "Pickpocket Someone: Kid",
+                                "Pickpocket Someone: Old Woman",
+                                "Pickpocket Someone: Businessman",
+                                "Pickpocket Someone: Lawyer",
+                                "Larceny: Apartment",
+                                "Larceny: Detached House",
+                                "Larceny: Mansion",
+                                "Larceny: Cars",
+                                "Larceny: Office",
+                                "Armed Robberies: Swift Robbery",
+                                "Armed Robberies: Thorough Robbery",
+                                "Armed Robberies: Swift Convenience",
+                                "Armed Robberies: Thorough Convenience",
+                                "Armed Robberies: Swift Bank",
+                                "Armed Robberies: Thorough Bank",
+                                "Armed Robberies: Swift Armored Car",
+                                "Armed Robberies: Thorough Armored Car",
+                                "Transport Drugs: Transport Cannabis",
+                                "Transport Drugs: Transport Amphetamines",
+                                "Transport Drugs: Transport Cocaine",
+                                "Transport Drugs: Sell Cannabis",
+                                "Transport Drugs: Sell Pills",
+                                "Transport Drugs: Sell Cocaine",
+                                "Plant a Computer Virus: Simple Virus",
+                                "Plant a Computer Virus: Polymorphic Virus",
+                                "Plant a Computer Virus: Tunneling Virus",
+                                "Plant a Computer Virus: Armored Virus",
+                                "Plant a Computer Virus: Stealth Virus",
+                                "Assassination: Assassinate a Target",
+                                "Assassination: Drive by Shooting",
+                                "Assassination: Car Bomb",
+                                "Assassination: Mob Boss",
+                                "Arson: Home",
+                                "Arson: Car Lot",
+                                "Arson: Office Building",
+                                "Arson: Apartment Building",
+                                "Arson: Warehouse",
+                                "Arson: Motel",
+                                "Arson: Government Building",
+                                "Grand Theft Auto: Steal a Parked Car",
+                                "Grand Theft Auto: Hijack a Car",
+                                "Grand Theft Auto: Steal Car from Showroom",
+                                "Pawn Shop: Side Door",
+                                "Pawn Shop: Rear Door",
+                                "Counterfeiting: Money",
+                                "Counterfeiting: Casino Tokens",
+                                "Counterfeiting: Credit Card",
+                                "Kidnapping: Kid",
+                                "Kidnapping: Woman",
+                                "Kidnapping: Undercover Cop",
+                                "Kidnapping: Mayor",
+                                "Arms Trafficking: Explosives",
+                                "Arms Trafficking: Firearms",
+                                "Bombings: Bomb a Factory", 
+                                "Bombings: Bomb a Government Building",
+                                "Hacking: Hack into a Bank Mainframe",
+                                "Hacking: Hack the F.B.I Mainframe"
+                            ],
+                            description: "Hide all crimes except this one"
+                        }, 
+                        Show_gym_stats:
+                        {
+                            value: "All",
+                            valueType: "list",
+                            possibleValues: ["All", "None", "Strength", "Defense", "Speed", "Dexterity"],
+                            description: "Hide all gym stats except this one"
+                        }
+                    }
                 },
                 List_Sorter:
                 {
