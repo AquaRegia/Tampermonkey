@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.30
+// @version      1.31
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -408,13 +408,13 @@ class BazaarSorterModule extends BaseModule
                 {
                     if(Array.from(arguments[0].classList).filter(e => e.includes("tablet")).length > 0)
                     {
-                        console.log("is tablet mode, aborting");
+                        //console.log("is tablet mode, aborting");
                         return;
                     }
 
                     if(Array.from(arguments[0].classList).filter(e => e.includes("mobile")).length > 0)
                     {
-                        console.log("is mobile mode, aborting");
+                        //console.log("is mobile mode, aborting");
                         return;
                     }
 
@@ -819,7 +819,7 @@ class ChainTargetsModule extends BaseModule
             let nextTarget;
             
             let unknownLevelTargets = this.unknownTargets.filter(e => e.level == 0);
-            let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 60000) && e.status.state != "Okay");
+            let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 60000) && (e.status.state == "Hospital" || e.status.state == "Jail"));
             let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
             let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
             
