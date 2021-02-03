@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.29
+// @version      1.30
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -660,13 +660,14 @@ class ChainTargetsModule extends BaseModule
             if(Date.now() > (newestTargetUpdate+5000))
             {
                 this.addBody();
-                this.addJs();
                 this.updateTarget();
             }
             else
             {
                 this.contentElement.innerHTML += "<p>It looks like you might be running this already in another tab. If not, wait a couple of seconds and then update this page.</p>";
             }
+            
+            this.addJs();
         });
     }
     
@@ -703,7 +704,7 @@ class ChainTargetsModule extends BaseModule
             }
             else
             {
-                this.allTargets.push({id: this.visitedProfileID, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0, respectGain: 0});
+                this.allTargets.push({id: this.visitedProfileID, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0, respectGain: 0, fairFight: 1});
                 localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
                 button.innerHTML = activeButton;
             }
@@ -810,78 +811,81 @@ class ChainTargetsModule extends BaseModule
     
     async updateTarget()
     {
-        if(this.allTargets.length == 0){return;}
-        
         this.loadTargets();
         
-        let now = Date.now();
-        let nextTarget;
-        
-        let unknownLevelTargets = this.unknownTargets.filter(e => e.level == 0);
-        let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 60000) && e.status.state != "Okay");
-        let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
-        let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
-        
-        let lastTargetInIdle = this.idleTargets.filter(e => e.status.state == "Okay").slice(this.maxOkay-1, this.maxOkay)[0];
-        
-        //If level isn't known, no priority can be determined, so pick this first
-        if(unknownLevelTargets.length > 0)
+        if(this.allTargets.length > 0)
         {
-            nextTarget = unknownLevelTargets[0];
-        }
-        //Targets that should be out of hospital or jail by now, more available targets == better choices
-        else if(freeTargets.length > 0)
-        {
-            nextTarget = freeTargets[0];
-        }
-        //These are all better than the worst one in the okay list, so pick one if 
-        //it's older than 1 minute in case they've been revived or busted out of jail
-        else if(oldBusyTargets.length > 0)
-        {
-            nextTarget = oldBusyTargets[0];
-        }
-        //If the best target in unknown is better than the last target in idle
-        else if(this.unknownTargets.length > 0 && this.compareTargets(lastTargetInIdle, this.unknownTargets[0]) > 0)
-        {
-            nextTarget = this.unknownTargets[0];
-        }
-        //If the best online target in unknown is better than the last target in idle, pick it if it's older than 15 minutes
-        else if(this.avoidOnlineTargets && oldOnlineTargets.length > 0 && this.compareTargets(lastTargetInIdle, oldOnlineTargets[0], true) > 0)
-        {
-            nextTarget = oldOnlineTargets[0];
-        }
-        //Assuming there's any Okay targets, pick the oldest one
-        else if(this.okayTargets.length > 0)
-        {
-            nextTarget = this.okayTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.okayTargets[0]);
-        }
-        else
-        {
-            nextTarget = this.allTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.allTargets[0]);
-        }
+            let now = Date.now();
+            let nextTarget;
+            
+            let unknownLevelTargets = this.unknownTargets.filter(e => e.level == 0);
+            let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 60000) && e.status.state != "Okay");
+            let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
+            let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
+            
+            let lastTargetInIdle = this.idleTargets.filter(e => e.status.state == "Okay").slice(this.maxOkay-1, this.maxOkay)[0];
+            
+            //If level isn't known, no priority can be determined, so pick this first
+            if(unknownLevelTargets.length > 0)
+            {
+                nextTarget = unknownLevelTargets[0];
+            }
+            //Targets that should be out of hospital or jail by now, more available targets == better choices
+            else if(freeTargets.length > 0)
+            {
+                nextTarget = freeTargets[0];
+            }
+            //These are all better than the worst one in the okay list, so pick one if 
+            //it's older than 1 minute in case they've been revived or busted out of jail
+            else if(oldBusyTargets.length > 0)
+            {
+                nextTarget = oldBusyTargets[0];
+            }
+            //If the best target in unknown is better than the last target in idle
+            else if(this.unknownTargets.length > 0 && this.compareTargets(lastTargetInIdle, this.unknownTargets[0]) > 0)
+            {
+                nextTarget = this.unknownTargets[0];
+            }
+            //If the best online target in unknown is better than the last target in idle, pick it if it's older than 15 minutes
+            else if(this.avoidOnlineTargets && oldOnlineTargets.length > 0 && this.compareTargets(lastTargetInIdle, oldOnlineTargets[0], true) > 0)
+            {
+                nextTarget = oldOnlineTargets[0];
+            }
+            //Assuming there's any Okay targets, pick the oldest one
+            else if(this.okayTargets.length > 0)
+            {
+                nextTarget = this.okayTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.okayTargets[0]);
+            }
+            else
+            {
+                nextTarget = this.allTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.allTargets[0]);
+            }
 
-        let json = await this.api(`/user/${nextTarget.id}?selections=profile`, 0);
+            let json = await this.api(`/user/${nextTarget.id}?selections=profile`, 0);
 
-        nextTarget.faction = json.faction;
-        nextTarget.status = json.status;
-        nextTarget.name = json.name;
-        nextTarget.level = json.level;
-        nextTarget.lastUpdate = Date.now();
-        nextTarget.lastAction = json.last_action;
-        nextTarget.respectGain = (Math.log(nextTarget.level) + 1)/4;
-        nextTarget.knowsFairFight = false;
-        
-        if(this.attackLog.hasOwnProperty(nextTarget.id))
-        {
-            nextTarget.respectGain *= this.attackLog[nextTarget.id].modifiers.fairFight;
-            nextTarget.knowsFairFight = true;
+            nextTarget.faction = json.faction;
+            nextTarget.status = json.status;
+            nextTarget.name = json.name;
+            nextTarget.level = json.level;
+            nextTarget.lastUpdate = Date.now();
+            nextTarget.lastAction = json.last_action;
+            nextTarget.respectGain = (Math.log(nextTarget.level) + 1)/4;
+            nextTarget.knowsFairFight = false;
+            
+            if(this.attackLog.hasOwnProperty(nextTarget.id))
+            {
+                nextTarget.fairFight = this.attackLog[nextTarget.id].modifiers.fairFight;
+                nextTarget.knowsFairFight = true;
+            }
+            
+            nextTarget.respectGain *= (nextTarget.fairFight || 1);
+            
+            nextTarget.respectGain = Math.round(nextTarget.respectGain * 100 + Number.EPSILON) / 100;
+            
+            localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
+            
+            this.updateTableBody();
         }
-        
-        nextTarget.respectGain = Math.round(nextTarget.respectGain * 100 + Number.EPSILON) / 100;
-        
-        localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
-        
-        this.updateTableBody();
         
         setTimeout(this.updateTarget.bind(this), 1500);
     }
@@ -957,6 +961,12 @@ class ChainTargetsModule extends BaseModule
             {
                 background-color: #a5c5d9;
             }
+            
+            .chainTargets #yataImportSpan
+            {
+                text-decoration: underline;
+                cursor: pointer;
+            }
         `);
     }
     
@@ -964,8 +974,9 @@ class ChainTargetsModule extends BaseModule
     {
         this.contentElement.innerHTML = `
         <div class="content-title m-bottom10">
-            <h4 id="skip-to-content" class="left">Chain Targets</h4>
-
+            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Chain Targets</h4>
+            <input id="yataImport" type="file" accept="application/json" style="display: none"/>
+            <span id="yataImportSpan">Import YATA targets</span>
         <div class="clear"></div>
         <hr class="page-head-delimiter">
         </div>
@@ -1018,6 +1029,48 @@ class ChainTargetsModule extends BaseModule
             {
                 this.freezeTables = false;
                 tbody.classList.remove("frozen");
+            });
+        });
+        
+        document.querySelector("#yataImportSpan").addEventListener("click", e => 
+        {
+            document.querySelector("#yataImport").click();
+        });
+        
+        let base = this;
+        
+        document.querySelector("#yataImport").addEventListener("change", function() 
+        {
+            this.files[this.files.length-1].text().then(e => 
+            {
+                try
+                {
+                    let targets = JSON.parse(e);
+                    
+                    base.loadTargets();
+                    
+                    let existingTargets = base.allTargets.map(e => e.id);
+                    let targetsAdded = 0;
+                    
+                    for(let [id, target] of Object.entries(targets))
+                    {
+                        if(!existingTargets.includes(id))
+                        {
+                            let newTarget = {id: id, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0, respectGain: 0, fairFight: target.fairFight};
+                            base.allTargets.push(newTarget);
+                            
+                            targetsAdded++;
+                        }
+                    }
+                    
+                    localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(base.allTargets));
+                    
+                    window.alert(`Successfully added ${targetsAdded} target${targetsAdded == 1 ? "" : "s"}`);
+                }
+                catch(e)
+                {
+                    window.alert("Couldn't parse file");
+                }
             });
         });
     }
