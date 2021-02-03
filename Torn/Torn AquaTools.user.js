@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.32
+// @version      1.33
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -366,6 +366,111 @@ class BaseModule
 }
 Object.defineProperty(BaseModule, "_ajaxModule", {value: new AjaxModule()})
 Object.defineProperty(BaseModule, "_apiModule", {value: new ApiModule()})
+
+class AutomaticDarkModeModule extends BaseModule
+{
+    constructor(darkPercent, lightPercent)
+    {
+        super("");
+        
+        this.darkPercent = darkPercent;
+        this.lightPercent = lightPercent;
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        let cssDefaultValues = ["--default-color: #333333;", "--default-blue-color: #006699;", "--default-blue-hover-color: #999999;", "--default-green-color: #678c00;", "--default-text-shadow: 1px 1px 2px rgba(0, 0, 0, 1);", "--default-green-dark-color: #99CC00;", "--default-blue-dark-color: #00A9F9;", "--default-white-color: #ffffff;", "--default-red-color: #D83500;", "--default-gray-f2-color: #F2F2F2;", "--default-gray-3-color: #333333;", "--default-gray-4-color: #444444;", "--default-gray-5-color: #555555;", "--default-gray-6-color: #666666;", "--default-gray-7-color: #777777;", "--default-gray-8-color: #888888;", "--default-gray-9-color: #999999;", "--default-gray-c-color: #CCCCCC;", "--default-gray-9-hover-color: #999999;", "--default-bg-red-color: rgba(228, 74, 27, 0.15);", "--default-bg-gray-color: rgba(221, 221, 221, 0.15);", "--default-bg-blue-color: rgba(105, 170, 190, 0.15);", "--default-bg-green-color: rgba(110, 160, 55, 0.15);", "--default-bg-red-hover-color: rgba(229, 76, 26, 0.3);", "--default-bg-blue-hover-color: rgba(102, 168, 190, 0.3);", "--default-bg-green-hover-color: rgba(109, 163, 54, 0.3);", "--default-bg-1-gradient: linear-gradient(to bottom, #4c6600 0%, #74e800 100%);", "--default-bg-2-gradient: linear-gradient(to bottom, #b20000 0%, #ff2626 100%);", "--default-bg-3-gradient: linear-gradient(to bottom, #b28500 0%, #ffc926 100%);", "--default-bg-4-gradient: linear-gradient(to bottom, #005b5b 0%, #00d9d9 100%);", "--default-bg-5-gradient: linear-gradient(to bottom, #003366 0%, #0080ff 100%);", "--default-bg-6-gradient: linear-gradient(to bottom, #46008c 0%, #9933ff 100%);", "--default-bg-7-gradient: linear-gradient(to bottom, #660066 0%, #ff26ff 100%);", "--default-bg-8-gradient: linear-gradient(to bottom, #000000 0%, #555555 100%);", "--default-bg-9-gradient: linear-gradient(to bottom, #f28d8d 0%, #fad3d3 100%);", "--default-bg-10-gradient: linear-gradient(to bottom, #e1c919 0%, #f4df9f 100%);", "--default-bg-11-gradient: linear-gradient(to bottom, #a0cf17 0%, #e0f3a3 100%);", "--default-bg-12-gradient: linear-gradient(to bottom, #18d9d9 0%, #b7f6f6 100%);", "--default-bg-13-gradient: linear-gradient(to bottom, #6fafee 0%, #c9e0f9 100%);", "--default-bg-14-gradient: linear-gradient(to bottom, #b072ef 0%, #e2cbf9 100%);", "--default-bg-15-gradient: linear-gradient(to bottom, #f080f0 0%, #fad3fa 100%);", "--default-bg-16-gradient: linear-gradient(to bottom, #616161 0%, #bbbbbb 100%);", "--default-bg-17-gradient: linear-gradient(to bottom, #400000 0%, #b20000 100%);", "--default-bg-18-gradient: linear-gradient(to bottom, #403000 0%,#cc9900 100%);", "--default-bg-19-gradient: linear-gradient(to bottom, #204000 0%, #4e9b00 100%);", "--default-bg-20-gradient: linear-gradient(to bottom, #003040 0%, #009d9d 100%);", "--default-bg-21-gradient: linear-gradient(to bottom, #000040 0%, #0000b7 100%);", "--default-bg-22-gradient: linear-gradient(to bottom, #400040 0%, #8c008c 100%);", "--default-panel-gradient: linear-gradient(180deg, #ffffff 0%, #dddddd 100%);", "--default-panel-active-gradient: linear-gradient(0deg, #ffffff 0%, #dddddd 100%);", "--default-content-title-color: #333333;", "--title-msg-gray-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--title-msg-red-gradient: repeating-linear-gradient(90deg, #b73d14, #b73d14 2px, #bd4c26 0, #bd4c26 4px);", "--title-msg-green-gradient: repeating-linear-gradient(90deg, #627e0d, #627e0d 2px, #6e8820 0, #6e8820 4px);", "--title-msg-blue-gradient: repeating-linear-gradient(90deg, #6798b1, #6798b1 2px, #73a1b7 0, #73a1b7 4px);", "--info-msg-green-gradient: linear-gradient(to bottom, #9ce085 0%, #55ae2b 100%);", "--info-msg-red-gradient: linear-gradient(to bottom, #e7b99a 0%, #d26946 100%);", "--info-msg-blue-gradient: linear-gradient(to bottom, #bbe1ee 0%, #6ca6c1 100%);", "--info-msg-grey-gradient: linear-gradient(to bottom, #cccccc 0%, #999999 100%);", "--info-msg-horizontal-gradient: repeating-linear-gradient(to right, transparent 0px, transparent 2px, #ffffff2b 2px, #ffffff2b 4px);", "--zoom-tooltip-bg-color: #cccccc;", "--zoom-tooltip-font-color: #79796a;", "--pagination-bg-gradient: linear-gradient(to bottom, #fefefe, #e1e0e1);", "--pagination-active-page-bg-gradient: linear-gradient(to bottom, #cccccc94, #fafafa 80%, #fafafa);", "--pagination-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);", "--pagination-arrow-color: #787878;", "--pagination-arrow-color-active: #333333;", "--info-msg-font-color: #666666;", "--info-msg-bg-gradient: linear-gradient(to bottom, #ffffff 0%, #e4e4e4 100%);", "--info-msg-delimiter-gradient: linear-gradient(to bottom, #ffffff 0%, #e4e4e4 100%);", "--tooltip-border-color: #ffffff;", "--tooltip-bg-color: #f2f2f2;", "--white-tooltip-box-shadow: 0 0 5px #999999;", "--white-tooltip-arrow-filter: drop-shadow(0px 1px 0px #fff) drop-shadow(0px 2px 1px #11111124);", "--default-bg-panel-color: #f2f2f2;", "--default-bg-panel-active-color: #ffffff;", "--default-content-panel-color: #666666;", "--default-panel-divider-outer-side-color: #cccccc;", "--default-panel-divider-inner-side-color: #ffffff;", "--panel-border-bottom-color: #ffffff;", "--panel-divider-outer-side-color: #dddddd;", "--panel-bg-color: #cccccc;", "--defalt-divider-short-linear-gradient: linear-gradient(0deg, #CCCCCC00 0%, #CCCCCC 50%, #CCCCCC00 100%);", "--defalt-divider-long-top-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(242, 242, 242, 0) 100%);", "--defalt-divider-long-bottom-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-top-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 1) 0%, rgba(242, 242, 242, 0) 100%);", "--divider-bottom-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 0) 0%, rgba(242, 242, 242, 1) 100%);", "--divider-left-linear-gradient: linear-gradient(to right, rgba(242, 242, 242, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-right-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(242, 242, 242, 1) 100%);", "--divider-gray-left-linear-gradient: linear-gradient(to right, rgba(232, 232, 232, 1) 0%, rgba(232, 232, 232, 0) 100%);", "--divider-gray-right-linear-gradient: linear-gradient(to right, rgba(232, 232, 232, 0) 0%, rgba(232, 232, 232, 1) 100%);", "--divider-gray-bottom-linear-gradient: linear-gradient(to bottom, rgba(232, 232, 232, 0) 0%, rgba(232, 232, 232, 1) 100%);", "--divider-white-left-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-white-right-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-white-bottom-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-white-top-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-dark-color: #cccccc;", "--divider-light-color: #ffffff;", "--page-background-color: #cccccc;", "--page-content-divider-top-color: #999999;", "--page-content-divider-bottom-color: #ebebeb;", "--page-header-divider-border-top: 1px solid #999999;", "--page-header-divider-border-bottom: 1px solid #EBEBEB;", "--content-title-links-hover: #333333;", "--main-bg: #CCCCCC url(/images/v2/main/bg_regular.jpg) left top repeat;", "--tutorial-outcome-icon-fill: #cfcfcf;", "--tutorial-outcome-icon-shadow: none;", "--tutorial-title-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--tutorial-title-shadow: 1px 1px 2px rgba(0, 0, 0, 0.65);", "--tutorial-title-color: #ffffff;", "--tutorial-title-content-color: #333333;", "--top-links-icon-svg-fill: #777777;", "--top-links-icon-svg-hover-fill: #333333;", "--btn-disabled-color: #777777;", "--btn-disabled-box-shadow: 0 1px 0 #FFFFFFA6;", "--btn-disabled-text-shadow: 0 -1px 0 #FFFFFF66;", "--btn-disabled-background: transparent linear-gradient(180deg, #999999 0%, #CCCCCC 100%) 0 0 no-repeat;", "--btn-orange-box-shadow: 0 1px 0 #FFFFFF1A;", "--btn-gold-disabled-background: transparent linear-gradient(180deg, #CECEBF 0%, #F0F0E1 100%) 0 0 no-repeat;", "--btn-gold-disabled-color: #9B9B8C;", "--btn-gold-disabled-text-shadow: 0 -1px 0 #FFFFFF73;", "--default-icon-filter: drop-shadow(0 1px 0 #ffffff);", "--icon-filter: drop-shadow(0 1px 0 #ffffff);", "--icon-hover-filter: var(--icon-filter);", "--icon-disabled-filter: var(--icon-filter);", "--icon-black-filter: drop-shadow(0 1px 1px #111111b5);", "--title-brown-gradient: repeating-linear-gradient(90deg, #8a4223, #8a4223 2px, #904b2d 0, #904b2d 4px);", "--title-black-gradient: repeating-linear-gradient(90deg, #242424, #242424 2px, #2e2e2e 0,#2e2e2e 4px);", "--title-gray-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--title-red-gradient: repeating-linear-gradient(90deg, #b73d14, #b73d14 2px, #bd4c26 0, #bd4c26 4px);", "--title-green-gradient: repeating-linear-gradient(90deg, #627e0d, #627e0d 2px, #6e8820 0, #6e8820 4px);", "--title-blue-gradient: repeating-linear-gradient(90deg, #6CA6C1, #6CA6C1 2px, #BBE1EE 0, #BBE1EE 4px);", "--title-text-shadow-color: #FFFFFF;", "--title-text-shadow: 0 1px 0 var(--title-text-shadow-color);", "--title-divider-indent-top: 0;", "--title-left-divider-black-gradient: var(--default-panel-divider-outer-side-color);", "--title-right-divider-black-gradient: var(--default-panel-divider-outer-side-color);", "--title-left-divider-red-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-red-gradient: var(--title-right-divider-black-gradient);", "--title-left-divider-green-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-green-gradient: var(--title-right-divider-black-gradient);", "--title-left-divider-blue-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-blue-gradient: var(--title-right-divider-black-gradient);", "--title-divider-top-color: transparent;", "--title-divider-bottom-color: transparent;", "--checkbox-hover-color: #333333;", "--checkbox-box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.75), 0 1px 0 0 rgba(255, 255, 255, 0.75);", "--checkbox-border-color: #666666;", "--checkbox-hover-bg-color: #666666;", "--items-plate-background: linear-gradient(0deg, #EBEBEB 0%, #DDDDDD 100%) 0 0 no-repeat;", "--items-plate-background-color: #E8E8E8;", "--items-plate-border: 1px solid;", "--items-plate-border-color: transparent transparent #FFFFFF transparent;", "--items-plate-box-shadow: inset 0 3px 4px #1111113B;", "--items-plate-button-gradient: linear-gradient(180deg, #FFFFFF 0%, #FFFFFFBF 100%) 0 0 no-repeat;", "--items-plate-button-border-color: #BBBBBB;", "--items-plate-button-group-color: #808080;", "--items-plate-equip-thumbnail-box-shadow: 0 0 5px #C4FF00;", "--items-plate-equip-thumbnail-border-color: #A9C08F;", "--items-plate-qty-color: #333333;", "--items-plate-qty-text-shadow: 0 -2px 1px #FFFFFF, 0 2px 1px #FFFFFF, 2px 0 1px #FFFFFF, -2px 0 1px #FFFFFF;", "--autocomplete-color: #333333;", "--autocomplete-hover-color: #333333;", "--autocomplete-options-color: #999999;", "--autocomplete-options-border-color: #cccccc;", "--autocomplete-options-background-color: #f2f2f2;", "--autocomplete-options-background-active-color: #FFFFFF;", "--autocomplete-options-active-color: #999999;", "--autocomplete-background-color: #ffffff;", "--autocomplete-background-hover-color: #e4e4e4;", "--autocomplete-box-shadow: 0 1px 2px 1px #cccccc;", "--autocomplete-border-color: #cccccc;", "--autocomplete-chosen-background-color: #E2ECD7;", "--input-color: #000000;", "--input-background-color: #ffffff;", "--input-border-color: #cccccc;", "--input-disabled-color: #cccccc;", "--input-disabled-background-color: #F2F2F2;", "--input-disabled-border-color: #cccccc;", "--input-hover-border-color: #999999;", "--input-focus-border-color: #1864AB80;", "--input-error-border-color: #FFA396;", "--input-hover-box-shadow: none;", "--input-focus-box-shadow: none;", "--input-error-box-shadow: none;", "--input-money-color: var(--input-color);", "--input-money-background-color: var(--input-background-color);", "--input-money-border-color: var(--input-border-color);", "--input-money-disabled-color: var(--input-disabled-color);", "--input-money-disabled-background-color: var(--input-disabled-background-color);", "--input-money-disabled-border-color: var(--input-disabled-border-color);", "--input-money-hover-border-color: var(--input-hover-border-color);", "--input-money-focus-border-color: var(--input-focus-border-color);", "--input-money-error-border-color: var(--input-error-border-color);", "--input-money-currency-background-color: #ffffff;", "--input-money-currency-gradient: linear-gradient(to bottom, #ffffff 0%,#dddddd 100%);", "--input-money-currency-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);", "--input-money-currency-color: #999999;", "--input-money-currency-hover-color: #666666;", "--input-money-currency-hover-gradient: linear-gradient(to bottom, #dddddd 0%, #ffffff 100%);", "--input-money-currency-hover-background-color: #dddddd;", "--default-tabs-bg-gradient: linear-gradient(180deg, #FFFFFF 0%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-active-bg-gradient: linear-gradient(180deg, #FFFFFF 0%, #EBEAEB 100%) 0 0 no-repeat;", "--default-tabs-box-shadow: 0 0 2px #00000040;", "--default-tabs-color: #999999;", "--default-tabs-active-color: #666666;", "--default-tabs-disabled-color: #cccccc;", "--default-tabs-text-shadow: 0 1px 0 #FFFFFFA6;", "--default-tabs-active-text-shadow: 0 1px 0 #FFFFFF;", "--default-tabs-disabled-text-shadow: 0 -1px 0 #FFFFFF;", "--default-tabs-divider-border-left-color: #cccccc;", "--default-tabs-divider-border-right-color: #cccccc;", "--default-tabs-divider-left-gradient: linear-gradient(180deg, #FFFFFF 0%, var(--default-panel-divider-outer-side-color) 50%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-divider-right-gradient: linear-gradient(180deg, #FFFFFF 0%, var(--default-panel-divider-inner-side-color) 50%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-divider-indent-top: 0;", "--default-tabs-icon-filter: drop-shadow(0 1px 0 #FFFFFF);", "--default-tabs-icon-disabled-filter: drop-shadow(0 -1px 0 #FFFFFF)"];
+        let cssResult = "";
+
+        for(let cssString of cssDefaultValues)
+        {
+            let result = cssString.replace(/(rgba\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}, [0-9]{0,1}\.{0,1}[0-9]{1,2}\))/g, e => 
+            {
+                let colors = e.slice(5, -1).split(", ").map(e => parseInt(e));
+                
+                if(colors.slice(0,3).reduce((a, b) => a + b, 0) > 391)
+                {
+                    return this.darken(...colors);
+                }
+                else
+                {
+                    return this.lighten(...colors);
+                }
+            }).replace(/(#[0-9A-f]{8})/g, e => 
+            {
+                let color = e.slice(1);
+                let r = parseInt(color.slice(0, 2), 16);
+                let g = parseInt(color.slice(2, 4), 16);
+                let b = parseInt(color.slice(4, 6), 16);
+                let a = parseInt(color.slice(6, 8), 16);
+                
+                if([r, g, b].reduce((a, b) => a + b, 0) > 391)
+                {
+                    return this.darken(r, g, b, a);
+                }
+                else
+                {
+                    return this.lighten(r, g, b, a);
+                }
+            }).replace(/#[0-9A-f]{6}/g, e => 
+            {
+                let color = e.slice(1);
+                let r = parseInt(color.slice(0, 2), 16);
+                let g = parseInt(color.slice(2, 4), 16);
+                let b = parseInt(color.slice(4, 6), 16);
+                
+                if([r, g, b].reduce((a, b) => a + b, 0) > 391)
+                {
+                    return this.darken(r, g, b);
+                }
+                else
+                {
+                    return this.lighten(r, g, b);
+                }
+            }).replace(/(rgb\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}\))/g, e => 
+            {
+                let colors = e.slice(4, -1).split(", ").map(e => parseInt(e));
+                
+                if(colors.slice(0,3).reduce((a, b) => a + b, 0) > 391)
+                {
+                    return this.darken(...colors);
+                }
+                else
+                {
+                    return this.lighten(...colors);
+                }
+            });
+            
+            if(cssString.includes("--main-bg"))
+            {
+                cssResult += result.split(" url")[0] + " !important;\n";
+            }
+            else
+            {
+                cssResult += result.slice(0, -1) + " !important;\n";
+            }
+        }
+        
+        GM_addStyle(`
+            :root
+            {
+                ${cssResult}
+            }
+        `);
+    }
+    
+    darken(r, g, b, a = 1)
+    {
+        return `rgba(${parseInt(((100 - this.darkPercent)/100)*r)}, ${parseInt(((100 - this.darkPercent)/100)*g)}, ${parseInt(((100 - this.darkPercent)/100)*b)}, ${a})`;
+    }
+
+    lighten(r, g, b, a = 1)
+    {
+        return `rgba(${parseInt((this.lightPercent/100)*(255-r) + r)}, ${parseInt((this.lightPercent/100)*(255-g) + g)}, ${parseInt((this.lightPercent/100)*(255-b) + b)}, ${a})`;
+    }
+}
 
 class BazaarSorterModule extends BaseModule
 {
@@ -773,11 +878,11 @@ class ChainTargetsModule extends BaseModule
         this.busyTargets = [];
         this.idleTargets = [];
         this.unknownTargets = [];
-        let lastTargetInOkay = this.allTargets.sort(sorter).filter(e => (now <= (e.lastUpdate + 300000)) && e.status.state == "Okay").slice(this.maxOkay-1, this.maxOkay)[0];
+        let lastTargetInOkay = this.allTargets.sort(sorter).filter(e => (now <= (e.lastUpdate + 600000)) && e.status.state == "Okay").slice(this.maxOkay-1, this.maxOkay)[0];
         
         this.allTargets.sort(sorter).forEach(e => 
         {
-            if(now <= (e.lastUpdate + 300000))
+            if(now <= (e.lastUpdate + 600000))
             {
                 if(e.status.state == "Okay")
                 {
@@ -906,7 +1011,7 @@ class ChainTargetsModule extends BaseModule
             
             .chainTargets table.chainTargetsTable a
             {
-                color: black;
+                color: var(--default-color);
             }
             
             .chainTargets table.chainTargetsTable th, .chainTargets table.chainTargetsTable td
@@ -917,7 +1022,8 @@ class ChainTargetsModule extends BaseModule
             
             .chainTargets table.chainTargetsTable th
             {
-                background-color: #EEE;
+                /*background-color: #EEE;*/
+                background-color: var(--default-bg-green-color);
             }
             
             .chainTargets table.chainTargetsTable th:nth-child(1){min-width: 60px;}
@@ -929,14 +1035,16 @@ class ChainTargetsModule extends BaseModule
             .chainTargets table.chainTargetsTable th:nth-child(7){min-width: 50px;}
             .chainTargets table.chainTargetsTable th:nth-child(8){min-width: 110px;}
             
-            .chainTarget td
+            .chainTargets td
             {
-                background-color: #CCC;
+                /*background-color: #CCC;*/
+                background-color: var(--tooltip-bg-color);
             }
             
             .chainTargets tr:nth-child(2n) td
             {
-                background-color: #DDD;
+                /*background-color: #DDD;*/
+                background-color: var(--default-gray-c-color);
             }
             
             .chainTargets table.chainTargetsTable caption
@@ -952,14 +1060,10 @@ class ChainTargetsModule extends BaseModule
                 font-weight: 600;
             }
             
-            .chainTargets table.chainTargetsTable .highlighted td
-            {
-                background-color: #CFC;
-            }
-            
             .chainTargets table.chainTargetsTable tbody.frozen td
             {
-                background-color: #a5c5d9;
+                /*background-color: #a5c5d9;*/
+                background-color: var(--default-bg-blue-hover-color);
             }
             
             .chainTargets #yataImportSpan
@@ -1292,18 +1396,18 @@ class CityFindsModule extends BaseModule
             if(this.itemGrouping != "None" && this.itemGrouping != "Name")
             {
                 html += `<tr>`;
-                html += `<td colspan="3" style="text-align: center; background-color: #CCC">${title.replace(/\_/g, " ")}</td>`;
+                html += `<td colspan="3" style="text-align: center; background-color: var(--tooltip-bg-color)">${title.replace(/\_/g, " ")}</td>`;
                 html += `</tr>`;
             }
 
             for(let item of Object.values(entry.items))
             {
-                html += `<tr style="background-color: #DDD"><td>${item.name}</td><td style="text-align: center">${item.amount}</td><td class="cityFindItem-${item.id} cityFindTitle-${title}">Unknown</td></tr>`;
+                html += `<tr style="background-color: var(--default-gray-c-color)"><td>${item.name}</td><td style="text-align: center">${item.amount}</td><td class="cityFindItem-${item.id} cityFindTitle-${title}">Unknown</td></tr>`;
             }
 
             if(this.itemGrouping != "None" && this.itemGrouping != "Name")
             {
-                html += `<tr style="background-color: #EEE"><td style="text-align: center">Subtotal:</td><td style="text-align: center">${Object.values(entry.items).reduce((a, b) => a + b.amount, 0)}</td><td class="cityFindTitleTotal-${title}">Unknown</td></tr>`;
+                html += `<tr style="background-color: var(--tooltip-bg-color)"><td style="text-align: center">Subtotal:</td><td style="text-align: center">${Object.values(entry.items).reduce((a, b) => a + b.amount, 0)}</td><td class="cityFindTitleTotal-${title}">Unknown</td></tr>`;
             }
         }
 
@@ -1379,7 +1483,8 @@ class CityFindsModule extends BaseModule
 
         #cityFindTable th
         {
-            background: #eee;
+            /*background: #eee;*/
+            background: var(--default-bg-green-color);
         }
 
         #cityFindTable tbody
@@ -1558,7 +1663,7 @@ class CompanyEffectivenessModule extends BaseModule
             position: fixed;
             padding: 10px;
 
-            background-color: white;
+            background-color: var(--tooltip-bg-color);
             border: 1px solid black;
 
             z-index: 100;
@@ -2409,6 +2514,7 @@ class SettingsModule extends BaseModule
             {
                 let classRef;
                 
+                if(name == "Automatic_Dark_Mode"){classRef = AutomaticDarkModeModule}
                 if(name == "Bazaar_Sorter"){classRef = BazaarSorterModule}
                 if(name == "Chain_Targets"){classRef = ChainTargetsModule}
                 if(name == "City_Finds"){classRef = CityFindsModule}
@@ -2457,6 +2563,28 @@ class SettingsModule extends BaseModule
                             valueType: "number", 
                             description: `How many API requests to allow within 1 minute, before introducing a 1.5 second delay between requests. 
                             There will always be a 7.5 second delay if there are 90+ requests within the last minute, regardless of this setting`
+                        }
+                    }
+                }, 
+                Automatic_Dark_Mode:
+                {
+                    isActive: false, 
+                    needsApiKey: false, 
+                    description: "This will automatically try to determine which things to make darker and which things to make lighter in order to create a dark mode.", 
+                    settingsHidden: true, 
+                    settings: 
+                    {
+                        Darkness_percent:
+                        {
+                            value: 80, 
+                            valueType: "number", 
+                            description: "Determines how much darker to make the light stuff (0-100)"
+                        }, 
+                        Lightness_percent:
+                        {
+                            value: 40, 
+                            valueType: "number", 
+                            description: "Determines how much lighter to make the dark stuff (0-100)"
                         }
                     }
                 }, 
@@ -2836,12 +2964,14 @@ class SettingsModule extends BaseModule
         
         #SettingsModule th
         {
-            background-color: #EEE;
+            /*background-color: #EEE;*/
+            background-color: var(--default-bg-green-color);
         }
         
         #SettingsModule tr.module ~ tr
         {
-            background-color: #CCC;
+            /*background-color: #CCC;*/
+            background-color: var(--default-gray-c-color);
         }
         
         #SettingsModule .hidden
@@ -2860,7 +2990,12 @@ class SettingsModule extends BaseModule
             font-size: 14px;
             text-align: center;
             font-weight: 600;
-            background-color: #DDD;
+        }
+        
+        #SettingsModule tr:nth-child(2n) td
+        {
+            /*background-color: #DDD;*/
+            background-color: var(--tooltip-bg-color);
         }
         
         #SettingsModule ul
