@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.33
+// @version      1.34
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -386,62 +386,11 @@ class AutomaticDarkModeModule extends BaseModule
 
         for(let cssString of cssDefaultValues)
         {
-            let result = cssString.replace(/(rgba\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}, [0-9]{0,1}\.{0,1}[0-9]{1,2}\))/g, e => 
-            {
-                let colors = e.slice(5, -1).split(", ").map(e => parseInt(e));
-                
-                if(colors.slice(0,3).reduce((a, b) => a + b, 0) > 391)
-                {
-                    return this.darken(...colors);
-                }
-                else
-                {
-                    return this.lighten(...colors);
-                }
-            }).replace(/(#[0-9A-f]{8})/g, e => 
-            {
-                let color = e.slice(1);
-                let r = parseInt(color.slice(0, 2), 16);
-                let g = parseInt(color.slice(2, 4), 16);
-                let b = parseInt(color.slice(4, 6), 16);
-                let a = parseInt(color.slice(6, 8), 16);
-                
-                if([r, g, b].reduce((a, b) => a + b, 0) > 391)
-                {
-                    return this.darken(r, g, b, a);
-                }
-                else
-                {
-                    return this.lighten(r, g, b, a);
-                }
-            }).replace(/#[0-9A-f]{6}/g, e => 
-            {
-                let color = e.slice(1);
-                let r = parseInt(color.slice(0, 2), 16);
-                let g = parseInt(color.slice(2, 4), 16);
-                let b = parseInt(color.slice(4, 6), 16);
-                
-                if([r, g, b].reduce((a, b) => a + b, 0) > 391)
-                {
-                    return this.darken(r, g, b);
-                }
-                else
-                {
-                    return this.lighten(r, g, b);
-                }
-            }).replace(/(rgb\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}\))/g, e => 
-            {
-                let colors = e.slice(4, -1).split(", ").map(e => parseInt(e));
-                
-                if(colors.slice(0,3).reduce((a, b) => a + b, 0) > 391)
-                {
-                    return this.darken(...colors);
-                }
-                else
-                {
-                    return this.lighten(...colors);
-                }
-            });
+            let result = cssString
+            .replace(/(rgba\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}, [0-9]{0,1}\.{0,1}[0-9]{1,2}\))/g, this.replaceColor.bind(this))
+            .replace(/(#[0-9A-f]{8})/g, this.replaceColor.bind(this))
+            .replace(/#[0-9A-f]{6}/g, this.replaceColor.bind(this))
+            .replace(/(rgb\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}\))/g, this.replaceColor.bind(this));
             
             if(cssString.includes("--main-bg"))
             {
@@ -459,6 +408,58 @@ class AutomaticDarkModeModule extends BaseModule
                 ${cssResult}
             }
         `);
+    }
+    
+    replaceColor(string)
+    {
+        let colors;
+        let colorSum;
+        
+        if(/(rgba\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}, [0-9]{0,1}\.{0,1}[0-9]{1,2}\))/.test(string))
+        {
+            colors = string.slice(5, -1).split(", ").map(e => parseInt(e));
+        }
+        else if(/(#[0-9A-f]{8})/.test(string))
+        {
+            let color = string.slice(1);
+            let r = parseInt(color.slice(0, 2), 16);
+            let g = parseInt(color.slice(2, 4), 16);
+            let b = parseInt(color.slice(4, 6), 16);
+            let a = parseInt(color.slice(6, 8), 16);
+            
+            colors = [r, g, b, a];
+        }
+        else if(/#[0-9A-f]{6}/.test(string))
+        {
+            let color = string.slice(1);
+            let r = parseInt(color.slice(0, 2), 16);
+            let g = parseInt(color.slice(2, 4), 16);
+            let b = parseInt(color.slice(4, 6), 16);
+            
+            colors = [r, g, b, 1];
+        }
+        else if(/(rgb\([0-9]{1,3}, [0-9]{1,3}, [0-9]{1,3}\))/.test(string))
+        {
+            colors = string.slice(4, -1).split(", ").map(e => parseInt(e));
+            colors.push(1);
+        }
+
+        colorSum = colors.slice(0, 3).reduce((a, b) => a + b, 0);
+        
+        if(colors.slice(0, 3).every(e => e == colors[0]) && colorSum < 460 && colorSum > 305)
+        {
+            return `rgba(${colors[0]}, ${colors[1]}, ${colors[2]}, ${colors[3]})`;
+        }
+        else if(colorSum > 391)
+        {
+            return this.darken(...colors);
+        }
+        else
+        {
+            return this.lighten(...colors);
+        }
+        
+        return `rgba(${colors[0]}, ${colors[1]}, ${colors[2]}, ${colors[3]})`;
     }
     
     darken(r, g, b, a = 1)
