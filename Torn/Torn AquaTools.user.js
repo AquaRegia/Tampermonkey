@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.34
+// @version      1.35
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -401,8 +401,12 @@ class AutomaticDarkModeModule extends BaseModule
                 cssResult += result.slice(0, -1) + " !important;\n";
             }
         }
-        
         GM_addStyle(`
+            .custom-bg-desktop, .custom-bg-mobile
+            {
+                background-image: none !important;
+            }
+            
             :root
             {
                 ${cssResult}
