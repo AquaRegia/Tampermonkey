@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.35
+// @version      1.36
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1987,6 +1987,11 @@ class EntityFilterModule extends BaseModule
             
             GM_addStyle(`
             form[name='crimes'] > ul > li
+            {
+                display: none;
+            }
+            
+            form[name='crimes'] > ul ~ div
             {
                 display: none;
             }
