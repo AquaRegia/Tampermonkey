@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.36
+// @version      1.37
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -767,14 +767,14 @@ class ChainTargetsModule extends BaseModule
             this.addStyle();
             this.addHeader();
             
-            if(Date.now() > (newestTargetUpdate+5000))
+            if(Date.now() > (newestTargetUpdate+30000))
             {
                 this.addBody();
                 this.updateTarget();
             }
             else
             {
-                this.contentElement.innerHTML += "<p>It looks like you might be running this already in another tab. If not, wait a couple of seconds and then update this page.</p>";
+                this.contentElement.innerHTML += "<p>It looks like you might be running this already in another tab. If not, wait for about 30 seconds and then update this page.</p>";
             }
             
             this.addJs();
@@ -971,13 +971,13 @@ class ChainTargetsModule extends BaseModule
                 nextTarget = this.allTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.allTargets[0]);
             }
 
-            let json = await this.api(`/user/${nextTarget.id}?selections=profile`, 0);
+            let json = await this.api(`/user/${nextTarget.id}?selections=profile,timestamp`, 0);
 
             nextTarget.faction = json.faction;
             nextTarget.status = json.status;
             nextTarget.name = json.name;
             nextTarget.level = json.level;
-            nextTarget.lastUpdate = Date.now();
+            nextTarget.lastUpdate = json.timestamp*1000;
             nextTarget.lastAction = json.last_action;
             nextTarget.respectGain = (Math.log(nextTarget.level) + 1)/4;
             nextTarget.knowsFairFight = false;
@@ -1262,7 +1262,7 @@ class ChainTargetsModule extends BaseModule
                 }
                 
                 html += "</td>";
-                html += `<td style="text-align: center"><span class="paddedTime">${String(parseInt((now - user.lastUpdate)/1000)).padStart(4, String.fromCharCode(160))}</span> seconds ago</td>`;
+                html += `<td style="text-align: center"><span class="paddedTime">${String(Math.max(0, parseInt((now - user.lastUpdate)/1000))).padStart(4, String.fromCharCode(160))}</span> seconds ago</td>`;
                 
                 html += "</td></tr>";
             }
@@ -1871,6 +1871,8 @@ class EloCalculatorModule extends BaseModule
         this.myElo = (await this.api(`/user/?selections=personalstats`, 0)).personalstats.elo;
         this.opponentElo = (await this.api(`/user/${this.opponentId}?selections=personalstats`, 0)).personalstats.elo;
         
+        this.startTime = Date.now();
+        
         while(true)
         {
             dialogButton = document.querySelector("[class*='dialogButtons___'] button");
@@ -1916,17 +1918,38 @@ class EloCalculatorModule extends BaseModule
             await Utils.sleep(500);
         }
         
-        let myNewElo = (await this.api(`/user/?selections=personalstats`, 0)).personalstats.elo;
-        let opponentNewElo = (await this.api(`/user/${this.opponentId}?selections=personalstats`, 0)).personalstats.elo;
+        div.innerHTML = `
+        Your Elo: <span class="numberContainer">Loading...</span><br/>
+        ${this.opponentName}'s Elo: <span class="numberContainer">Loading...</span><br/>
+        `;
         
-        this.log(myNewElo, opponentNewElo);
+        dialogButton.before(div);
+
+        let myNewElo;
+        let opponentNewElo;
+        
+        while(true)
+        {
+            let myResponse = (await this.api(`/user/?selections=personalstats,timestamp`, 0));
+            myNewElo = myResponse.personalstats.elo;
+            let myTimestamp = myResponse.timestamp*1000;
+            
+            let opponentResponse = (await this.api(`/user/${this.opponentId}?selections=personalstats,timestamp`, 0));
+            opponentNewElo = opponentResponse.personalstats.elo;
+            let opponentTimestamp = opponentResponse.timestamp*1000;
+            
+            if(Math.min(myTimestamp, opponentTimestamp) > this.startTime)
+            {
+                break;
+            }
+            
+            await Utils.sleep(5000);
+        }
         
         div.innerHTML = `
         Your Elo: <span class="numberContainer">${this.padValue(myNewElo, 6)} (${this.padValue((myNewElo >= this.myElo ? "+" : "-") + Math.abs(myNewElo - this.myElo), 3)})</span><br/>
         ${this.opponentName}'s Elo: <span class="numberContainer">${this.padValue(opponentNewElo, 6)} (${this.padValue((opponentNewElo >= this.opponentElo ? "+" : "-") + Math.abs(opponentNewElo - this.opponentElo), 3)})</span><br/>
         `;
-        
-        dialogButton.before(div);
     }
     
     calculateScore(myElo, opponentElo)
