@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.37
+// @version      1.38
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -692,7 +692,7 @@ class ChainTargetsModule extends BaseModule
                 linkOrder: 23, 
                 name: "Chains", 
                 status: null, 
-                elements: this.allTargets.filter(e => e.level > 0).map(e => ({name: e.name, link: "/profiles.php?XID=" + e.id, status: "Last known status: " + e.status.state, lastAction: parseInt(((Date.now() - e.lastUpdate)/1000))}))
+                elements: this.allTargets.map(e => ({name: e.name, link: "/profiles.php?XID=" + e.id, status: "Last known status: " + e.status.state, lastAction: parseInt(((Date.now() - e.lastUpdate)/1000))}))
             };
             
             if(document.location.href.includes(this.targetUrl))
@@ -740,6 +740,7 @@ class ChainTargetsModule extends BaseModule
                 json.profileButtons.buttons = newButtonsObject;
                 
                 this.visitedProfileID = json.user.userID;
+                this.visitedProfileName = json.user.playerName;
                 
                 return json;
             });
@@ -774,7 +775,7 @@ class ChainTargetsModule extends BaseModule
             }
             else
             {
-                this.contentElement.innerHTML += "<p>It looks like you might be running this already in another tab. If not, wait for about 30 seconds and then update this page.</p>";
+                this.contentElement.innerHTML += "<p>It looks like you might be running this already in another tab. If not, wait for up to 30 seconds and then update this page.</p>";
             }
             
             this.addJs();
@@ -814,7 +815,8 @@ class ChainTargetsModule extends BaseModule
             }
             else
             {
-                this.allTargets.push({id: this.visitedProfileID, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0, respectGain: 0, fairFight: 1});
+                let note = window.prompt(`Add a description for ${this.visitedProfileName} [${this.visitedProfileID}]`);
+                this.allTargets.push({id: this.visitedProfileID, faction: "", status: "", name: this.visitedProfileName, note: note || "", level: 0, lastUpdate: Date.now()-60000, lastAction: 0, respectGain: 0, fairFight: 1});
                 localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
                 button.innerHTML = activeButton;
             }
@@ -887,7 +889,7 @@ class ChainTargetsModule extends BaseModule
         
         this.allTargets.sort(sorter).forEach(e => 
         {
-            if(now <= (e.lastUpdate + 600000))
+            if(now <= (e.lastUpdate + 600000) && e.level > 0)
             {
                 if(e.status.state == "Okay")
                 {
@@ -928,7 +930,7 @@ class ChainTargetsModule extends BaseModule
             let now = Date.now();
             let nextTarget;
             
-            let unknownLevelTargets = this.unknownTargets.filter(e => e.level == 0);
+            let unknownLevelTargets = this.allTargets.filter(e => e.level == 0);
             let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 60000) && (e.status.state == "Hospital" || e.status.state == "Jail"));
             let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
             let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
@@ -1165,7 +1167,7 @@ class ChainTargetsModule extends BaseModule
                     {
                         if(!existingTargets.includes(id))
                         {
-                            let newTarget = {id: id, faction: "", status: "", name: "", level: 0, lastUpdate: 0, lastAction: 0, respectGain: 0, fairFight: target.fairFight};
+                            let newTarget = {id: id, faction: "", status: "", name: target.name, note: target.note, level: 0, lastUpdate: Date.now(), lastAction: 0, respectGain: 0, fairFight: target.fairFight};
                             base.allTargets.push(newTarget);
                             
                             targetsAdded++;
@@ -1222,10 +1224,13 @@ class ChainTargetsModule extends BaseModule
                 }
 
                 html += `</td>`;
-                html += `<td><a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">${user.name} [${user.id}]</a></td>`;
+
+                let note = user.note || "";
+                
+                html += `<td title="${note}"><a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">${user.name} [${user.id}]</a></td>`;
                 html += `<td style="text-align: center">${user.level}</td>`;
                 
-                let respectColor = "black";
+                let respectColor = "var(--default-color)";
                 if(user.knowsFairFight){respectColor = "var(--default-green-color)"}
                 
                 html += `<td style="text-align: center; color: ${respectColor}">${user.respectGain}</td>`;
@@ -1947,8 +1952,8 @@ class EloCalculatorModule extends BaseModule
         }
         
         div.innerHTML = `
-        Your Elo: <span class="numberContainer">${this.padValue(myNewElo, 6)} (${this.padValue((myNewElo >= this.myElo ? "+" : "-") + Math.abs(myNewElo - this.myElo), 3)})</span><br/>
-        ${this.opponentName}'s Elo: <span class="numberContainer">${this.padValue(opponentNewElo, 6)} (${this.padValue((opponentNewElo >= this.opponentElo ? "+" : "-") + Math.abs(opponentNewElo - this.opponentElo), 3)})</span><br/>
+        Your Elo: <span class="numberContainer">${this.padValue(myNewElo, 4)} (${this.padValue((myNewElo >= this.myElo ? "+" : "-") + Math.abs(myNewElo - this.myElo), 3)})</span><br/>
+        ${this.opponentName}'s Elo: <span class="numberContainer">${this.padValue(opponentNewElo, 4)} (${this.padValue((opponentNewElo >= this.opponentElo ? "+" : "-") + Math.abs(opponentNewElo - this.opponentElo), 3)})</span><br/>
         `;
     }
     
