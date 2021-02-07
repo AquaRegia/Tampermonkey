@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.38
+// @version      1.39
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -114,7 +114,7 @@ class AjaxModule
                 
                 result.addEventListener("readystatechange", function()
                 {
-                    if(this.readyState == 4 && this.responseText[0] == "{")
+                    if(this.readyState == 4 && ["", "text", "json"].includes(this.responseType) && this.responseText[0] == "{")
                     {
                         let json = JSON.parse(this.responseText);
                         //console.log("XHR:", json);
@@ -873,13 +873,22 @@ class ChainTargetsModule extends BaseModule
         let now = Date.now();
         
         this.allTargets = JSON.parse(localStorage.getItem("AquaTools_ChainTargets_targets") || "[]");
-        
+
         if(document.location.href.includes(this.targetUrl))
         {
             this.updateAttackLog();
         }
         
         let sorter = (a, b) => (this.compareTargets(a, b));
+        
+        //for backward compatibility
+        this.allTargets.forEach(e =>
+        {
+            if(!e.lastAction)
+            {
+                e.lastAction = 0;
+            }
+        });
         
         this.okayTargets = [];
         this.busyTargets = [];
