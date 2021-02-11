@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.39
+// @version      1.40
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1263,7 +1263,7 @@ class ChainTargetsModule extends BaseModule
                 if(user.lastAction.status == "Offline"){statusColor = "var(--default-red-color)"}
                 if(user.lastAction.status == "Idle"){statusColor = "#FF8800"}
                 
-                html += `<td style="color: ${statusColor}">${user.lastAction.status}</td>`;
+                html += `<td style="color: ${statusColor}" title="Last seen: ${user.lastAction.relative}">${user.lastAction.status}</td>`;
                 html += `<td style="text-align: center">`;
                 
                 if(user.status.state == "Okay")
@@ -2385,6 +2385,772 @@ class ListSorterModule extends BaseModule
     }
 }
 
+class PokerCalculatorModule extends BaseModule
+{
+    constructor()
+    {
+        super("/loader.php?sid=holdem");
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        this.lastLength = 0;
+        this.addStyle();
+        
+        this.addAjaxListener("getSidebarData", false, json => 
+        {
+            this.name = json.user.name;
+            this.addStatisticsTable();
+        });
+    }
+    
+    update()
+    {
+        console.time("Update");
+        
+        let allCards = this.getFullDeck();
+        
+        let knownCards = Array.from(document.querySelectorAll("[class*='flipper___'] > div[class*='front___'] > div")).map(e => 
+        {
+            return (e.classList[2] || "null-0").split("_")[0]
+                .replace("-A", "-14")
+                .replace("-K", "-13")
+                .replace("-Q", "-12")
+                .replace("-J", "-11");
+        });
+        
+        let communityCards = knownCards.slice(0, 5);
+        
+        allCards = this.filterDeck(allCards, knownCards.filter(e => !e.includes("null")));
+        
+        if(JSON.stringify(knownCards).length != this.lastLength)
+        {
+            let playerNodes = Array.from(document.querySelectorAll("[class*='playerMe___']")).concat(Array.from(document.querySelectorAll("[class*='player___']")));
+            
+            document.querySelector("#pokerCalc-myHand tbody").innerHTML = "";
+            document.querySelector("#pokerCalc-upgrades tbody").innerHTML = "";
+            
+            playerNodes.forEach(player =>
+            {
+                let myName = player.querySelector("[class*='name___']").innerText;
+                
+                let myCards = Array.from(player.querySelectorAll("div[class*='front___'] > div")).map(e => 
+                {
+                    return (e.classList[2] || "null-0").split("_")[0]
+                        .replace("-A", "-14")
+                        .replace("-K", "-13")
+                        .replace("-Q", "-12")
+                        .replace("-J", "-11");
+                });
+                
+                let myHand = this.getHandScore(communityCards.concat(myCards));
+
+                if(myHand.score > 0)
+                {
+                    let myUpgrades = {};
+                    let additionalCards = [];
+                    let myRank = this.calculateHandRank(myHand, communityCards, allCards);
+                    
+                    if(myName == this.name)
+                    {
+                        if(communityCards.filter(e => !e.includes("null")).length == 3)
+                        {
+                            for(let a of allCards)
+                            {
+                                for(let b of allCards)
+                                {
+                                    if(a > b)
+                                    {
+                                        additionalCards.push([a, b]);
+                                    }
+                                }
+                            }
+                        }
+                        else if(communityCards.filter(e => !e.includes("null")).length == 4)
+                        {
+                            for(let a of allCards)
+                            {
+                                additionalCards.push([a]);
+                            }
+                        }
+                    }
+                    
+                    for(let cards of additionalCards)
+                    {
+                        let thisHand = this.getHandScore(communityCards.concat(cards).concat(myCards));
+                        
+                        if(thisHand.score > myHand.score)
+                        {
+                            let type;
+                        
+                            if(thisHand.description.includes("Four of a kind"))
+                            {
+                                type = thisHand.description.split("<span").slice(0, -1).join("<span");
+                            }
+                            else if(thisHand.description.includes("Three of a kind"))
+                            {
+                                type = thisHand.description.split("<span").slice(0, -2).join("<span");
+                            }
+                            else if(thisHand.description.includes("Two pairs"))
+                            {
+                                type = thisHand.description.split("<span").slice(0, -1).join("<span");
+                            }
+                            else if(thisHand.description.includes("Pair"))
+                            {
+                                type = thisHand.description.split("<span").slice(0, -3).join("<span");
+                            }
+                            else
+                            {
+                                type = thisHand.description.split(":")[0];
+                            }
+                            
+                            if(!myUpgrades.hasOwnProperty(type))
+                            {
+                                myUpgrades[type] = {hand: thisHand, type: type, cards: cards, score: thisHand.score, duplicates: 0, chance: 0};
+                            }
+                            
+                            myUpgrades[type].description = thisHand.description;
+                            myUpgrades[type].duplicates++;
+                        }
+                    }
+                    
+                    let topUpgrades = Object.values(myUpgrades).sort((a, b) => b.score - a.score).slice(0, 5);
+                    
+                    topUpgrades.forEach(e => 
+                    {
+                        let thisRank = this.calculateHandRank(e.hand, communityCards.concat(e.cards), this.filterDeck(allCards, e.cards));
+                        
+                        e.rank = thisRank.rank;
+                        e.top = thisRank.top;
+                        e.chance = ((e.duplicates / additionalCards.length)*100);
+                    });
+
+                    document.querySelector("#pokerCalc-myHand tbody").innerHTML += `<tr><td>${myName}</td><td>${myHand.description}</td><td>${myRank.rank}</td><td>${myRank.top}</td></tr>`;
+                    
+                    let upgradeString = "";
+                    
+                    for(let upgrade of topUpgrades)
+                    {
+                        upgradeString += "<tr>";
+                        upgradeString += `<td>${upgrade.chance.toFixed(2)}%</td><td>${upgrade.type}</td><td>${upgrade.rank}</td><td>${upgrade.top}</td>`;
+                        upgradeString += "</tr>"
+                    }
+                    
+                    if(myName == this.name)
+                    {
+                        document.querySelector("#pokerCalc-upgrades tbody").innerHTML = upgradeString;
+                    }
+                }
+            });
+
+            let playerRows = Array.from(document.querySelectorAll("#pokerCalc-div #pokerCalc-myHand tr")).slice(1);
+            
+            if(playerRows.length > 0)
+            {
+                playerRows.reduce((a, b) => parseInt(a.children[2].innerText.split("/")[0]) <= parseInt(b.children[2].innerText.split("/")[0]) ? a : b).style.background = "#dfd";
+            }
+            
+            let upgradeRows = Array.from(document.querySelectorAll("#pokerCalc-div #pokerCalc-upgrades tr")).slice(1);
+            
+            if(upgradeRows.length > 0)
+            {
+                upgradeRows.reduce((a, b) => parseInt(a.children[2].innerText.split("/")[0]) <= parseInt(b.children[2].innerText.split("/")[0]) ? a : b).style.background = "#dfd";
+            }
+            
+            this.lastLength = JSON.stringify(knownCards).length;
+        }
+        
+        console.timeEnd("Update");
+        
+        setTimeout(this.update.bind(this), 1000);
+    }
+    
+    addStyle()
+    {
+        GM_addStyle(`
+            #pokerCalc-div *
+            {
+                all: revert;
+            }
+            
+            #pokerCalc-div
+            {
+                background-color: #eee;
+                color: #444;
+                padding: 5px;
+                margin-top: 10px;
+            }
+            
+            #pokerCalc-div table
+            {
+                border-collapse: collapse;
+                margin-top: 10px;
+                width: 100%;
+            }
+            
+            #pokerCalc-div th, #pokerCalc-div td
+            {
+                border: 1px solid #444;
+                padding: 5px;
+                width: 25%;
+            }
+            
+            #pokerCalc-div tr td:nth-child(1), #pokerCalc-div tr td:nth-child(3), #pokerCalc-div tr td:nth-child(4)
+            {
+                text-align: center;
+            }
+            
+            #pokerCalc-div caption
+            {
+                margin-bottom: 2px;
+                font-weight: 600;
+            }
+        `);
+    }
+    
+    async addStatisticsTable()
+    {
+        let div = document.createElement("div");
+        div.id = "pokerCalc-div";
+
+        div.innerHTML = `
+        <table id="pokerCalc-myHand">
+        <caption>Hands</caption>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Hand</th>
+            <th>Rank</th>
+            <th>Top</th>
+        </tr>
+        </thead>
+        <tbody>
+        
+        </tbody>
+        </table>
+        
+        <table id="pokerCalc-upgrades">
+        <caption>Potential hands</caption>
+        <thead>
+        <tr>
+            <th>Chance</th>
+            <th>Hand</th>
+            <th>Rank</th>
+            <th>Top</th>
+        </tr>
+        </thead>
+        <tbody>
+        
+        </tbody>
+        </table>
+        `;
+        
+        let root;
+        
+        while(!(root = document.querySelector("#react-root")))
+        {
+            await Utils.sleep(500);
+        }
+        
+        root.after(div);
+        
+        this.update();
+    }
+    
+    prettifyHand(hand)
+    {
+        let resultText = "";
+        
+        for(let card of hand)
+        {
+            if(card != "null-0")
+            {
+                resultText += " " + card
+                                    .replace("diamonds", "<span style='color: red'>♦</span>")
+                                    .replace("spades", "<span style='color: black'>♠</span>")
+                                    .replace("hearts", "<span style='color: red'>♥</span>")
+                                    .replace("clubs", "<span style='color: black'>♣</span>")
+                                    .replace("-14", "-A")
+                                    .replace("-13", "K")
+                                    .replace("-12", "Q")
+                                    .replace("-11", "J")
+                                    .replace("-", "");
+            }
+        }
+        
+        return resultText;
+    }
+    
+    getFullDeck()
+    {
+        let result = [];
+        
+        for(let suit of ["hearts", "diamonds", "spades", "clubs"])
+        {
+            for(let value of [2,3,4,5,6,7,8,9,10,11,12,13,14])
+            {
+                result.push(suit + "-" + value);
+            }
+        }
+        
+        return result;
+    }
+    
+    filterDeck(deck, cards)
+    {
+        for(let card of cards)
+        {
+            let index = deck.indexOf(card);
+            
+            if(index != -1)
+            {
+                delete deck[index];
+            }
+        }
+        
+        return deck.filter(e => e != "empty");
+    }
+    
+    calculateHandRank(myHand, communityCards, allCards)
+    {
+        let otherBetterHands = 0;
+        let totalHands = 1;
+        
+        for(let a of allCards)
+        {
+            for(let b of allCards)
+            {
+                if(a > b)
+                {
+                    let thisHand = this.getHandScore(communityCards.concat([a, b]));
+            
+                    otherBetterHands += thisHand.score >= myHand.score;
+                    totalHands++;
+                }
+            }
+        }
+        
+        return {rank: `${otherBetterHands+1} / ${totalHands}`, top: `${(((otherBetterHands+1) / totalHands)*100).toFixed(1)}%`}
+    }
+    
+    getHandScore(hand)
+    {
+        hand = hand.filter(e => !e.includes("null"));
+        
+        if(hand.length < 5){return {description: "", score: 0};}
+        
+        let resultString = "";
+        let resultText = "";
+        let handResult;
+        let handObject = this.makeHandObject(hand);
+
+        if(handResult = this.hasFourOfAKind(hand, handObject))
+        {
+            resultString += "7";
+            resultText += "Four of a kind:";
+        }
+        else if(handResult = this.hasFullHouse(hand, handObject))
+        {
+            resultString += "6";
+            resultText += "Full house:";
+        }
+        else if(handResult = this.hasFlush(hand, handObject))
+        {
+            let isRoyal = this.hasRoyalFlush(hand, handObject);
+            
+            if(isRoyal)
+            {
+                handResult = isRoyal;
+                resultString += "9";
+                resultText += "Royal flush:";
+            }
+            else
+            {
+                let isStraight = this.hasStraightFlush(hand, handObject);
+                
+                if(isStraight)
+                {
+                    handResult = isStraight;
+                    resultString += "8";
+                    resultText += "Straight flush:";
+                }
+                else
+                {
+                    resultString += "5";
+                    resultText += "Flush:";
+                }
+            }
+        }
+        else if(handResult = this.hasStraight(hand, handObject))
+        {
+            resultString += "4";
+            resultText += "Straight:";
+        }
+        else if(handResult = this.hasThreeOfAKind(hand, handObject))
+        {
+            resultString += "3";
+            resultText += "Three of a kind:";
+        }
+        else if(handResult = this.hasTwoPairs(hand, handObject))
+        {
+            resultString += "2";
+            resultText += "Two pair:";
+        }
+        else if(handResult = this.hasPair(hand, handObject))
+        {
+            resultString += "1";
+            resultText += "Pair:";
+        }
+        else
+        {
+            resultString += "0";
+            resultText += "High card:";
+            
+            handResult = hand.slice(0, 5);
+        }
+
+        for(let card of handResult)
+        {
+            resultString += parseInt(card.split("-")[1]).toString(16);
+        }
+        
+        resultText += this.prettifyHand(handResult);
+
+        return {description: resultText, score: parseInt(resultString, 16)};
+    }
+    
+    makeHandObject(hand)
+    {
+        let resultMap = {cards: hand, suits: {}, values: {}};
+        
+        hand.sort((a, b) => parseInt(b.split("-")[1]) - parseInt(a.split("-")[1])).filter(e => e != "null-0").forEach(e => 
+        {
+            let suit = e.split("-")[0];
+            let value = e.split("-")[1];
+            
+            if(!resultMap.suits.hasOwnProperty(suit))
+            {
+                resultMap.suits[suit] = [];
+            }
+            
+            if(!resultMap.values.hasOwnProperty(value))
+            {
+                resultMap.values[value] = [];
+            }
+            
+            resultMap.suits[suit].push(e);
+            resultMap.values[value].push(e);
+        });
+        
+        return resultMap;
+    }
+    
+    hasRoyalFlush(hand, handObject)
+    {
+        hand = hand.sort((a, b) => parseInt(b.split("-")[1]) - parseInt(a.split("-")[1]));
+        
+        let flush = this.hasFlush(hand, handObject);
+        let straight = this.hasStraight(hand, handObject);
+        
+        if(flush && straight)
+        {
+            let straightSameColor = straight.filter(e => e.split("-")[0] == flush[0].split("-")[0]).length == 5;
+            
+            if(straightSameColor && hand[0].split("-")[1] == "14")
+            {
+                return flush;
+            }
+        }
+    }
+    
+    hasStraightFlush(hand, handObject)
+    {
+        hand = hand.sort((a, b) => parseInt(b.split("-")[1]) - parseInt(a.split("-")[1]));
+        
+        let flush = this.hasFlush(hand, handObject);
+        let straight = this.hasStraight(hand, handObject);
+        
+        if(flush && straight)
+        {
+            let straightSameColor = straight.filter(e => e.split("-")[0] == flush[0].split("-")[0]).length == 5;
+            
+            if(straightSameColor && hand[0].split("-")[1] != "14")
+            {
+                return flush;
+            }
+        }
+    }
+    
+    hasFourOfAKind(hand, handObject)
+    {
+        let quadruplets = Object.values(handObject.values).filter(e => e.length == 4);
+
+        if(quadruplets.length > 0)
+        {
+            delete hand[hand.indexOf(quadruplets[0][0])];
+            delete hand[hand.indexOf(quadruplets[0][1])];
+            delete hand[hand.indexOf(quadruplets[0][2])];
+            delete hand[hand.indexOf(quadruplets[0][3])];
+            
+            hand = hand.filter(e => e != "empty");
+            
+            return quadruplets[0].concat(hand).slice(0, 5);
+        }
+    }
+    
+    hasFullHouse(hand, handObject)
+    {
+        let pairs = Object.values(handObject.values).filter(e => e.length == 2);
+        let triplets = Object.values(handObject.values).filter(e => e.length == 3);
+        
+        if(pairs.length > 0 && triplets.length > 0)
+        {
+            delete hand[hand.indexOf(pairs[0][0])];
+            delete hand[hand.indexOf(pairs[0][1])];
+            delete hand[hand.indexOf(triplets[0][0])];
+            delete hand[hand.indexOf(triplets[0][1])];
+            
+            hand = hand.filter(e => e != "empty");
+            
+            if(parseInt(pairs[0][0].split("-")[1]) > parseInt(triplets[0][0].split("-")[1]))
+            {
+                return pairs[0].concat(triplets[0].concat(hand)).slice(0, 5);
+            }
+            else
+            {
+                return triplets[0].concat(pairs[0].concat(hand)).slice(0, 5);
+            }
+        }
+    }
+    
+    hasFlush(hand, handObject)
+    {
+        let quintuplets = Object.values(handObject.suits).filter(e => e.length == 5);
+
+        if(quintuplets.length == 1)
+        {
+            return quintuplets[0];
+        }
+    }
+
+    hasStraight(hand, handObject)
+    {
+        hand = hand.sort((a, b) => parseInt(b.split("-")[1]) - parseInt(a.split("-")[1]));
+        
+        let streak = 1;
+        let streakCards = [hand[0]];
+        
+        for(let i = 1; i < hand.length; i++)
+        {
+            let current = parseInt(hand[i].split("-")[1]);
+            let previous = parseInt(hand[i-1].split("-")[1]);
+
+            if(current == previous){continue;}
+            
+            if(current != (previous - 1) && !(current == 5 && previous == 14))
+            {
+                streak = 1;
+                streakCards = [hand[i]];
+            }
+            else
+            {
+                streak++;
+                streakCards.push(hand[i]);
+            }
+            
+            if(streak == 5)
+            {
+                break;
+            }
+        }
+        
+        if(streak == 5)
+        {
+            if(streakCards.some(e => e.includes("-14")) && streakCards.some(e => e.includes("-5")))
+            {
+                streakCards = streakCards.slice(1).concat(streakCards.slice(0, 1));
+            }
+            
+            return streakCards;
+        }
+    }
+    
+    hasThreeOfAKind(hand, handObject)
+    {
+        let triplets = Object.values(handObject.values).filter(e => e.length == 3);
+
+        if(triplets.length > 0)
+        {
+            delete hand[hand.indexOf(triplets[0][0])];
+            delete hand[hand.indexOf(triplets[0][1])];
+            delete hand[hand.indexOf(triplets[0][2])];
+            
+            hand = hand.filter(e => e != "empty");
+            
+            return triplets[0].concat(hand).slice(0, 5);
+        }
+    }
+    
+    hasTwoPairs(hand, handObject)
+    {
+        let pairs = Object.values(handObject.values).filter(e => e.length == 2);
+
+        if(pairs.length > 1)
+        {
+            delete hand[hand.indexOf(pairs[0][0])];
+            delete hand[hand.indexOf(pairs[0][1])];
+            delete hand[hand.indexOf(pairs[1][0])];
+            delete hand[hand.indexOf(pairs[1][1])];
+            
+            hand = hand.filter(e => e != "empty");
+            
+            if(parseInt(pairs[0][0].split("-")[1]) > parseInt(pairs[1][0].split("-")[1]))
+            {
+                return pairs[0].concat(pairs[1].concat(hand)).slice(0, 5);
+            }
+            else
+            {
+                return pairs[1].concat(pairs[0].concat(hand)).slice(0, 5);
+            }
+        }
+    }
+    
+    hasPair(hand, handObject)
+    {
+        let pairs = Object.values(handObject.values).filter(e => e.length == 2);
+
+        if(pairs.length > 0)
+        {
+            delete hand[hand.indexOf(pairs[0][0])];
+            delete hand[hand.indexOf(pairs[0][1])];
+            
+            hand = hand.filter(e => e != "empty");
+            
+            return pairs[0].concat(hand).slice(0, 5);
+        }
+    }
+}
+
+class PowerLevelModule extends BaseModule
+{
+    constructor()
+    {
+        super("profiles.php?XID=");
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        this.hasCalculated = false;
+        
+        this.addAjaxListener("getProfileData", false, json => 
+        {
+            if(!this.hasCalculated)
+            {
+                this.calculatePowerLevel(json);
+                this.hasCalculated = true;
+            }
+        });
+    }
+    
+    async calculatePowerLevel(json)
+    {
+        let id = document.location.href.split("XID=")[1];
+        let data = (await this.api(`/user/${id}?selections=personalstats`, 300000)).personalstats;
+        
+        let powerLevel = 0;
+        
+        let userActivityStart = new Date("2011-08-01").valueOf()/1000;
+        let timePlayed;
+        let timePlayedMultiplier = 1;
+        
+        if(json.user.signUp > userActivityStart)
+        {
+            timePlayed = (Date.now()/1000 - json.basicInformation.lastAction.seconds) - json.user.signUp;
+        }
+        else
+        {
+            timePlayed = (Date.now()/1000 - json.basicInformation.lastAction.seconds) - userActivityStart;
+            
+            let timePlayedBeforeActivityStart = userActivityStart - json.user.signUp;
+
+            timePlayedMultiplier = 1 + (timePlayedBeforeActivityStart/timePlayed);
+        }
+        
+        let percentPlayed = data.useractivity / timePlayed;
+        
+        let breakdownString = "";
+        
+        powerLevel += (timePlayed/120) * percentPlayed * 2 * timePlayedMultiplier;
+        breakdownString += "Time played: +" + parseInt((timePlayed/120) * percentPlayed * 2 * timePlayedMultiplier).toLocaleString() + "<br/>";
+        
+        powerLevel += ((timePlayed*timePlayedMultiplier)/86400) * 25;
+        breakdownString += "Days played: +" + parseInt(((timePlayed*timePlayedMultiplier)/86400) * 25).toLocaleString() + "<br/>";
+        
+        powerLevel += data.xantaken * 250;
+        breakdownString += "Xanax taken: +" + (data.xantaken * 250).toLocaleString() + "<br/>";
+        
+        powerLevel += data.boostersused * 100;
+        breakdownString += "Boosters used: +" + (data.boostersused * 100).toLocaleString() + "<br/>";
+        
+        powerLevel += data.energydrinkused * 25;
+        breakdownString += "Energy drinks: +" + (data.energydrinkused * 25).toLocaleString() + "<br/>";
+        
+        powerLevel += data.refills * 150;
+        breakdownString += "Refills: +" + (data.refills * 150).toLocaleString() + "<br/>";
+        
+        powerLevel -= data.dumpsearches * 5;
+        breakdownString += "Dump searches: -" + (data.dumpsearches * 5).toLocaleString() + "<br/>";
+        
+        powerLevel -= data.attackswon * 25;
+        powerLevel -= data.attackslost * 25;
+        powerLevel -= data.attacksdraw * 25;
+        breakdownString += "Attacks: -" + ((data.attackswon + data.attackslost + data.attacksdraw) * 25).toLocaleString() + "<br/>";
+        
+        powerLevel -= data.peoplebusted * 10;
+        powerLevel -= data.failedbusts * 10;
+        breakdownString += "Busts: -" + ((data.peoplebusted + data.failedbusts) * 10).toLocaleString() + "<br/>";
+        
+        powerLevel -= data.revives * 75;
+        breakdownString += "Revives: -" + (data.revives * 75).toLocaleString() + "<br/>";
+        
+        powerLevel *= 1.01**data.statenhancersused;
+        breakdownString += "Stat enhancers: *" + (1.01**data.statenhancersused).toLocaleString() + "<br/>";
+        
+        powerLevel *= (0.4 + Math.min(0.6, data.networth/33333333333));
+        breakdownString += "Networth multiplier: *" + (0.4 + Math.min(0.6, data.networth/33333333333)).toFixed(3) + "<br/>";
+        
+        if((data.xantaken + data.exttaken) < 150)
+        {
+            powerLevel *= 1.23;
+            breakdownString += "SSL multiplier: *1.23<br/>";
+        }
+        
+        this.powerLevel = powerLevel;
+        this.breakdownString = breakdownString;
+
+        this.addPowerLevelToInformation();
+    }
+    
+    async addPowerLevelToInformation()
+    {
+        let infoTable;
+        
+        while(!(infoTable = document.querySelector(".info-table")))
+        {
+            await Utils.sleep(100);
+        }
+        
+        let li = document.createElement("li");
+        li.innerHTML = `<div class="user-information-section"><span class="bold">Power level</span></div><div class="user-info-value"><span class="bold" title="${this.breakdownString}">${(this.powerLevel/127).toLocaleString().split(".")[0]}</span></div>`;
+        
+        infoTable.firstChild.after(li);
+    }
+}
+
 class VaultSharingModule extends BaseModule
 {
     constructor(startTime, myBalance, spouseBalance)
@@ -3282,3 +4048,5 @@ class SettingsModule extends BaseModule
 }
 
 let settings = new SettingsModule();
+//let power = new PowerLevelModule();
+//let poker = new PokerCalculatorModule();
