@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.40
+// @version      1.41
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -2408,7 +2408,7 @@ class PokerCalculatorModule extends BaseModule
     
     update()
     {
-        console.time("Update");
+        //console.time("Update");
         
         let allCards = this.getFullDeck();
         
@@ -2483,27 +2483,23 @@ class PokerCalculatorModule extends BaseModule
                         
                         if(thisHand.score > myHand.score)
                         {
-                            let type;
+                            let type = thisHand.description.split(":")[0];
                         
-                            if(thisHand.description.includes("Four of a kind"))
+                            if(thisHand.description.includes("Four of a kind") || thisHand.description.includes("Three of a kind") || thisHand.description.includes("Pair"))
                             {
-                                type = thisHand.description.split("<span").slice(0, -1).join("<span");
+                                type += ": " + thisHand.description.split("</span>")[1].split("<span")[0].trim() + "s";
                             }
-                            else if(thisHand.description.includes("Three of a kind"))
+                            else if(thisHand.description.includes("Full house"))
                             {
-                                type = thisHand.description.split("<span").slice(0, -2).join("<span");
+                                type += ": " + thisHand.description.split("</span>")[1].split("<span")[0].trim() + "s full of " + thisHand.description.split("</span>").reverse()[0].split("</td>")[0] + "s";
+                            }
+                            else if(thisHand.description.includes("Straight"))
+                            {
+                                type += ": " + thisHand.description.split("</span>")[1].split("<span")[0].trim() + "-high";
                             }
                             else if(thisHand.description.includes("Two pairs"))
                             {
-                                type = thisHand.description.split("<span").slice(0, -1).join("<span");
-                            }
-                            else if(thisHand.description.includes("Pair"))
-                            {
-                                type = thisHand.description.split("<span").slice(0, -3).join("<span");
-                            }
-                            else
-                            {
-                                type = thisHand.description.split(":")[0];
+                                type += ": " + thisHand.description.split("</span>")[1].split("<span")[0].trim() + "s and " + thisHand.description.split("</span>")[3].split("<span")[0].trim() + "s";
                             }
                             
                             if(!myUpgrades.hasOwnProperty(type))
@@ -2562,7 +2558,7 @@ class PokerCalculatorModule extends BaseModule
             this.lastLength = JSON.stringify(knownCards).length;
         }
         
-        console.timeEnd("Update");
+        //console.timeEnd("Update");
         
         setTimeout(this.update.bind(this), 1000);
     }
@@ -2796,7 +2792,7 @@ class PokerCalculatorModule extends BaseModule
         else if(handResult = this.hasTwoPairs(hand, handObject))
         {
             resultString += "2";
-            resultText += "Two pair:";
+            resultText += "Two pairs:";
         }
         else if(handResult = this.hasPair(hand, handObject))
         {
@@ -2818,7 +2814,7 @@ class PokerCalculatorModule extends BaseModule
         
         resultText += this.prettifyHand(handResult);
 
-        return {description: resultText, score: parseInt(resultString, 16)};
+        return {description: resultText, result: handResult, score: parseInt(resultString, 16)};
     }
     
     makeHandObject(hand)
@@ -3335,6 +3331,8 @@ class SettingsModule extends BaseModule
                 if(name == "Elo_Calculator"){classRef = EloCalculatorModule}
                 if(name == "Entity_Filter"){classRef = EntityFilterModule}
                 if(name == "List_Sorter"){classRef = ListSorterModule}
+                if(name == "Poker_Calculator"){classRef = PokerCalculatorModule}
+                if(name == "Power_Level"){classRef = PowerLevelModule}
                 if(name == "Vault_Sharing"){classRef = VaultSharingModule}
                 
                 if(classRef)
@@ -3663,6 +3661,30 @@ class SettingsModule extends BaseModule
                             description: "This is the sort order of the first click"
                         }
                     }
+                },
+                Poker_Calculator:
+                {
+                    isActive: false, 
+                    needsApiKey: false, 
+                    description: `This will add two tables below the poker table, containing statistics about the current game.<br/><br/>
+                    The first table shows your current hand, and how it ranks compared to all other possible hands in the current situation. After the river it will also contain the same numbers for all people at the table.<br/><br/>
+                    The second table shows the top 5 hands you can potentially get after the turn or river. Note that "top 5" means the 5 hands with the highest objective score, a hand that's objectively better 
+                    may still be subjectively worse if it involves more community cards. That's where the rank comes in, the rank is a subjective measurement, compared to all other possible hands. The rank in this table may not be 
+                    completely accurate however, for example there are many different ways you could get the same straight, but for computational reasons they are all consolidated and show your odds of getting <i>any</i> of them. The 
+                    rank shown is for the hand of that type with the highest objective score.`,
+                    settingsHidden: true, 
+                    settings: {}
+                }, 
+                Power_Level:
+                {
+                    isActive: false, 
+                    needsApiKey: true, 
+                    description: `This adds a <i>power level</i> to every player's basic information in their profile. Power level is intended to show basically how much energy that player has used in the gym, 
+                    and thus how high their battle stats are. Two players with the same power level are often pretty equal in strength, but depending on how they've used happy jumps early on or how many army points they've spent they can both be 
+                    either a lot stronger or a lot weaker than their power level would suggest. This will at least give you an idea of how strong someone is.<br/><br/>
+                    If you hover the power level it'll show a breakdown of the personal stats used in the calculation.`, 
+                    settingsHidden: true, 
+                    settings: {}
                 },
                 Vault_Sharing:
                 {
@@ -4048,5 +4070,3 @@ class SettingsModule extends BaseModule
 }
 
 let settings = new SettingsModule();
-//let power = new PowerLevelModule();
-//let poker = new PokerCalculatorModule();
