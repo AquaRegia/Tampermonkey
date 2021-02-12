@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.41
+// @version      1.42
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -119,7 +119,7 @@ class AjaxModule
                         let json = JSON.parse(this.responseText);
                         //console.log("XHR:", json);
                         stub = base._runAjaxCallbacks(this.responseURL, false, json);
-                        
+
                         if(stub)
                         {
                             Object.defineProperty(this, "responseText", 
@@ -3049,6 +3049,8 @@ class PowerLevelModule extends BaseModule
                 this.calculatePowerLevel(json);
                 this.hasCalculated = true;
             }
+            
+            return json;
         });
     }
     
