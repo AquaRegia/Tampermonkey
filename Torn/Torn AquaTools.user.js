@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.42
+// @version      1.43
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -2387,10 +2387,13 @@ class ListSorterModule extends BaseModule
 
 class PokerCalculatorModule extends BaseModule
 {
-    constructor()
+    constructor(upgradesToShow, upgradeOrder)
     {
         super("/loader.php?sid=holdem");
         
+        this.upgradesToShow = upgradesToShow;
+        this.upgradeOrder = upgradeOrder;
+
         this.ready();
     }
     
@@ -2512,18 +2515,48 @@ class PokerCalculatorModule extends BaseModule
                         }
                     }
                     
-                    let topUpgrades = Object.values(myUpgrades).sort((a, b) => b.score - a.score).slice(0, 5);
+                    document.querySelector("#pokerCalc-myHand tbody").innerHTML += `<tr><td>${myName}</td><td>${myHand.description}</td><td>${myRank.rank}</td><td>${myRank.top}</td></tr>`;
+                    
+                    let topUpgrades = Object.values(myUpgrades);
+        
+                    topUpgrades.forEach(e => 
+                    {
+                        e.chance = ((e.duplicates / additionalCards.length)*100);
+                    });
+                    
+                    if(this.upgradeOrder == "Hand")
+                    {
+                        topUpgrades = Object.values(topUpgrades).sort((a, b) => b.score - a.score).slice(0, this.upgradesToShow);
+                    }
+                    else if(this.upgradeOrder == "Chance")
+                    {
+                        topUpgrades = Object.values(topUpgrades).sort((a, b) => b.chance - a.chance).slice(0, this.upgradesToShow);
+                    }
+                    else if(this.upgradeOrder == "Rank")
+                    {
+                        topUpgrades.forEach(e => 
+                        {
+                            let thisRank = this.calculateHandRank(e.hand, communityCards.concat(e.cards), this.filterDeck(allCards, e.cards));
+                            
+                            e.rank = thisRank.rank;
+                            e.top = thisRank.top;
+                            e.topNumber = thisRank.topNumber;
+                        });
+                        
+                        topUpgrades = Object.values(topUpgrades).sort((a, b) => a.topNumber - b.topNumber).slice(0, this.upgradesToShow);
+                    }
                     
                     topUpgrades.forEach(e => 
                     {
-                        let thisRank = this.calculateHandRank(e.hand, communityCards.concat(e.cards), this.filterDeck(allCards, e.cards));
-                        
-                        e.rank = thisRank.rank;
-                        e.top = thisRank.top;
-                        e.chance = ((e.duplicates / additionalCards.length)*100);
+                        if(!e.rank)
+                        {
+                            let thisRank = this.calculateHandRank(e.hand, communityCards.concat(e.cards), this.filterDeck(allCards, e.cards));
+                            
+                            e.rank = thisRank.rank;
+                            e.top = thisRank.top;
+                            e.topNumber = thisRank.topNumber;
+                        }
                     });
-
-                    document.querySelector("#pokerCalc-myHand tbody").innerHTML += `<tr><td>${myName}</td><td>${myHand.description}</td><td>${myRank.rank}</td><td>${myRank.top}</td></tr>`;
                     
                     let upgradeString = "";
                     
@@ -2545,14 +2578,14 @@ class PokerCalculatorModule extends BaseModule
             
             if(playerRows.length > 0)
             {
-                playerRows.reduce((a, b) => parseInt(a.children[2].innerText.split("/")[0]) <= parseInt(b.children[2].innerText.split("/")[0]) ? a : b).style.background = "#dfd";
+                playerRows.reduce((a, b) => parseFloat(a.children[3].innerText.replace(/[^0-9\.]/g, "")) <= parseFloat(b.children[3].innerText.replace(/[^0-9\.]/g, "")) ? a : b).style.background = "#dfd";
             }
             
             let upgradeRows = Array.from(document.querySelectorAll("#pokerCalc-div #pokerCalc-upgrades tr")).slice(1);
             
             if(upgradeRows.length > 0)
             {
-                upgradeRows.reduce((a, b) => parseInt(a.children[2].innerText.split("/")[0]) <= parseInt(b.children[2].innerText.split("/")[0]) ? a : b).style.background = "#dfd";
+                upgradeRows.reduce((a, b) => parseFloat(a.children[3].innerText.replace(/[^0-9\.]/g, "")) <= parseFloat(b.children[3].innerText.replace(/[^0-9\.]/g, "")) ? a : b).style.background = "#dfd";
             }
             
             this.lastLength = JSON.stringify(knownCards).length;
@@ -2560,7 +2593,7 @@ class PokerCalculatorModule extends BaseModule
         
         //console.timeEnd("Update");
         
-        setTimeout(this.update.bind(this), 1000);
+        setTimeout(this.update.bind(this), 500);
     }
     
     addStyle()
@@ -2728,7 +2761,7 @@ class PokerCalculatorModule extends BaseModule
             }
         }
         
-        return {rank: `${otherBetterHands+1} / ${totalHands}`, top: `${(((otherBetterHands+1) / totalHands)*100).toFixed(1)}%`}
+        return {rank: `${otherBetterHands+1} / ${totalHands}`, top: `${(((otherBetterHands+1) / totalHands)*100).toFixed(1)}%`, topNumber: (otherBetterHands+1) / totalHands}
     }
     
     getHandScore(hand)
@@ -3675,7 +3708,22 @@ class SettingsModule extends BaseModule
                     completely accurate however, for example there are many different ways you could get the same straight, but for computational reasons they are all consolidated and show your odds of getting <i>any</i> of them. The 
                     rank shown is for the hand of that type with the highest objective score.`,
                     settingsHidden: true, 
-                    settings: {}
+                    settings: 
+                    {
+                        Potential_hands:
+                        {
+                            value: 5, 
+                            valueType: "number", 
+                            description: "How many potential hands to show"
+                        }, 
+                        Potential_hands_order:
+                        {
+                            value: "Hand", 
+                            valueType: "list", 
+                            possibleValues: ["Chance", "Hand", "Rank"], 
+                            description: "How to order the potential hands (note: ordering by rank is computationally heavy)"
+                        }
+                    }
                 }, 
                 Power_Level:
                 {
