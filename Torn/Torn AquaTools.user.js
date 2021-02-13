@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.43
+// @version      1.44
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -940,9 +940,10 @@ class ChainTargetsModule extends BaseModule
             let nextTarget;
             
             let unknownLevelTargets = this.allTargets.filter(e => e.level == 0);
-            let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000 + 60000) && (e.status.state == "Hospital" || e.status.state == "Jail"));
+            let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000) && (now > (e.lastUpdate + 30000)) && (e.status.state == "Hospital" || e.status.state == "Jail"));
             let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
             let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
+            let newFairFight = this.allTargets.filter(e => !e.knowsFairFight && this.attackLog.hasOwnProperty(e.id));
             
             let lastTargetInIdle = this.idleTargets.filter(e => e.status.state == "Okay").slice(this.maxOkay-1, this.maxOkay)[0];
             
@@ -955,6 +956,11 @@ class ChainTargetsModule extends BaseModule
             else if(freeTargets.length > 0)
             {
                 nextTarget = freeTargets[0];
+            }
+            //Previously unknown fair fight modifier is now known, update it
+            else if(newFairFight.length > 0)
+            {
+                nextTarget = newFairFight[0];
             }
             //These are all better than the worst one in the okay list, so pick one if 
             //it's older than 1 minute in case they've been revived or busted out of jail
@@ -997,6 +1003,11 @@ class ChainTargetsModule extends BaseModule
             {
                 nextTarget.fairFight = this.attackLog[nextTarget.id].modifiers.fairFight;
                 nextTarget.knowsFairFight = true;
+            }
+            
+            if(nextTarget.status.state != "Okay")
+            {
+                nextTarget.hideActionUntil = 0;
             }
             
             nextTarget.respectGain *= (nextTarget.fairFight || 1);
@@ -1152,6 +1163,26 @@ class ChainTargetsModule extends BaseModule
             });
         });
         
+        document.querySelectorAll(".chainTargetsTable").forEach(e => 
+        {
+            e.addEventListener("click", event => 
+            {
+                if(event.target.nodeName == "A" && event.target.innerText == "Attack")
+                {
+                    this.loadTargets();
+                    
+                    let target = this.allTargets.filter(e => e.id == event.target.href.split("user2ID=")[1])[0];
+                    
+                    if(target)
+                    {
+                        target.hideActionUntil = Date.now() + 60000;
+                    }
+                    
+                    localStorage.setItem("AquaTools_ChainTargets_targets", JSON.stringify(this.allTargets));
+                }
+            });
+        });
+        
         document.querySelector("#yataImportSpan").addEventListener("click", e => 
         {
             document.querySelector("#yataImport").click();
@@ -1266,13 +1297,16 @@ class ChainTargetsModule extends BaseModule
                 html += `<td style="color: ${statusColor}" title="Last seen: ${user.lastAction.relative}">${user.lastAction.status}</td>`;
                 html += `<td style="text-align: center">`;
                 
-                if(user.status.state == "Okay")
+                if((user.hideActionUntil || 0) < Date.now())
                 {
-                    html += `<a target="_blank" href="https://www.torn.com/loader2.php?sid=getInAttack&user2ID=${user.id}">Attack</a>`;
-                }
-                else
-                {
-                    html += `<a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">Profile</a>`;
+                    if(user.status.state == "Okay")
+                    {
+                        html += `<a target="_blank" href="https://www.torn.com/loader2.php?sid=getInAttack&user2ID=${user.id}">Attack</a>`;
+                    }
+                    else
+                    {
+                        html += `<a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">Profile</a>`;
+                    }
                 }
                 
                 html += "</td>";
@@ -2411,7 +2445,7 @@ class PokerCalculatorModule extends BaseModule
     
     update()
     {
-        //console.time("Update");
+        console.time("Update");
         
         let allCards = this.getFullDeck();
         
@@ -2454,6 +2488,7 @@ class PokerCalculatorModule extends BaseModule
                 {
                     let myUpgrades = {};
                     let additionalCards = [];
+
                     let myRank = this.calculateHandRank(myHand, communityCards, allCards);
                     
                     if(myName == this.name)
@@ -2591,7 +2626,7 @@ class PokerCalculatorModule extends BaseModule
             this.lastLength = JSON.stringify(knownCards).length;
         }
         
-        //console.timeEnd("Update");
+        console.timeEnd("Update");
         
         setTimeout(this.update.bind(this), 500);
     }
@@ -2872,7 +2907,7 @@ class PokerCalculatorModule extends BaseModule
             resultMap.suits[suit].push(e);
             resultMap.values[value].push(e);
         });
-        
+
         return resultMap;
     }
     
