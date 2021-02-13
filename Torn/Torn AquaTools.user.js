@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.44
+// @version      1.45
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -978,8 +978,8 @@ class ChainTargetsModule extends BaseModule
             {
                 nextTarget = oldOnlineTargets[0];
             }
-            //Assuming there's any Okay targets, pick the oldest one
-            else if(this.okayTargets.length > 0)
+            //Assuming there's any Okay targets, pick the oldest one that hasn't been updated in 30 seconds
+            else if(this.okayTargets.filter(e => now > (e.lastUpdate + 30000)).length > 0)
             {
                 nextTarget = this.okayTargets.reduce((a, b) => a.lastUpdate < b.lastUpdate ? a : b, this.okayTargets[0]);
             }
