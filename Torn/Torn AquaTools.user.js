@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.45
+// @version      1.46
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -941,7 +941,7 @@ class ChainTargetsModule extends BaseModule
             
             let unknownLevelTargets = this.allTargets.filter(e => e.level == 0);
             let freeTargets = this.allTargets.filter(e => now > (e.status.until*1000) && (now > (e.lastUpdate + 30000)) && (e.status.state == "Hospital" || e.status.state == "Jail"));
-            let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000));
+            let oldBusyTargets = this.busyTargets.filter(e => now > (e.lastUpdate + 60000) && (now + 30000) < (e.status.until*1000));
             let oldOnlineTargets = this.unknownTargets.filter(e => e.lastAction.status != "Offline" && now > (e.lastUpdate + 900000));
             let newFairFight = this.allTargets.filter(e => !e.knowsFairFight && this.attackLog.hasOwnProperty(e.id));
             
