@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.46
+// @version      1.47
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -998,6 +998,7 @@ class ChainTargetsModule extends BaseModule
             nextTarget.lastAction = json.last_action;
             nextTarget.respectGain = (Math.log(nextTarget.level) + 1)/4;
             nextTarget.knowsFairFight = false;
+            nextTarget.life = json.life;
             
             if(this.attackLog.hasOwnProperty(nextTarget.id))
             {
@@ -1062,13 +1063,13 @@ class ChainTargetsModule extends BaseModule
             .chainTargets table.chainTargetsTable th:nth-child(7){min-width: 50px;}
             .chainTargets table.chainTargetsTable th:nth-child(8){min-width: 110px;}
             
-            .chainTargets td
+            .chainTargets tr, .chainTargets td
             {
                 /*background-color: #CCC;*/
                 background-color: var(--tooltip-bg-color);
             }
             
-            .chainTargets tr:nth-child(2n) td
+            .chainTargets tr:nth-child(2n), .chainTargets tr:nth-child(2n) td
             {
                 /*background-color: #DDD;*/
                 background-color: var(--default-gray-c-color);
@@ -1087,10 +1088,10 @@ class ChainTargetsModule extends BaseModule
                 font-weight: 600;
             }
             
-            .chainTargets table.chainTargetsTable tbody.frozen td
+            .chainTargets table.chainTargetsTable tbody.frozen tr, .chainTargets table.chainTargetsTable tbody.frozen td
             {
                 /*background-color: #a5c5d9;*/
-                background-color: var(--default-bg-blue-hover-color);
+                background-color: var(--default-bg-blue-hover-color) !important;
             }
             
             .chainTargets #yataImportSpan
@@ -1268,7 +1269,17 @@ class ChainTargetsModule extends BaseModule
                 let note = user.note || "";
                 
                 html += `<td title="${note}"><a target="_blank" href="https://www.torn.com/profiles.php?XID=${user.id}">${user.name} [${user.id}]</a></td>`;
-                html += `<td style="text-align: center">${user.level}</td>`;
+                
+                let healthPercent = "100%";
+                let healthString = "Unknown";
+
+                if(user.life)
+                {
+                    healthPercent = parseInt((user.life.current / user.life.maximum)*100) + "%";
+                    healthString = user.life.current + " / " + user.life.maximum;
+                }
+                
+                html += `<td style="text-align: center; background: linear-gradient(to right, rgba(0, 0, 255, 0.15) ${healthPercent}, transparent ${healthPercent} 100%)" title="Health: ${healthString}">${user.level}</td>`;
                 
                 let respectColor = "var(--default-color)";
                 if(user.knowsFairFight){respectColor = "var(--default-green-color)"}
@@ -2440,6 +2451,8 @@ class PokerCalculatorModule extends BaseModule
         {
             this.name = json.user.name;
             this.addStatisticsTable();
+            
+            return json;
         });
     }
     
@@ -3214,6 +3227,207 @@ class PowerLevelModule extends BaseModule
         li.innerHTML = `<div class="user-information-section"><span class="bold">Power level</span></div><div class="user-info-value"><span class="bold" title="${this.breakdownString}">${(this.powerLevel/127).toLocaleString().split(".")[0]}</span></div>`;
         
         infoTable.firstChild.after(li);
+    }
+}
+
+class StalkerModule extends BaseModule
+{
+    constructor()
+    {
+        super("&page=Stalker");
+        
+        this.ready();
+    }
+    
+    async init()
+    {
+        this.replaceContent("content-wrapper", async element =>
+        {
+            this.contentElement = element;
+            this.contentElement.classList.add("stalkerContainer");
+            
+            let targetId = document.location.href.split("XID=")[1].split("&")[0];
+            
+            this.target = await this.api(`/user/${targetId}?selections=basic,personalstats,timestamp`, 0);
+            
+            this.loadImageUrls();
+            this.addStyle();
+            this.addHeader();
+            this.addBody();
+            
+            this.stalk();
+        });
+    }
+    
+    addStyle()
+    {
+        GM_addStyle(`
+        .stalkerHistory *
+        {
+            all: revert;
+        }
+        
+        .stalkerRow
+        {
+            margin-bottom: 10px;
+            padding: 4px;
+            border: 1px solid var(--default-color);
+        }
+        
+        .stalkerTime
+        {
+            font-weight: 600;
+        }
+        
+        ul.stalkerText li
+        {
+            margin-bottom: 5px;
+        }
+        
+        .stalkerAttack
+        {
+            list-style-image: ${this.images.attack};
+        }
+        
+        .stalkerItem
+        {
+            list-style-image: ${this.images.item};
+        }
+        
+        .stalkerBazaar
+        {
+            list-style-image: ${this.images.bazaar};
+        }
+        
+        .stalkerPoints
+        {
+            list-style-image: ${this.images.points};
+        }
+        `);
+    }
+    
+    addHeader()
+    {
+        this.contentElement.innerHTML = `
+        <div class="content-title m-bottom10">
+            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Stalker - ${this.target.name}</h4>
+        <div class="clear"></div>
+        <hr class="page-head-delimiter">
+        </div>
+        `;
+    }
+    
+    addBody()
+    {
+        let html = "";
+        
+        for(let [id, title] of [["okayTargets", "Top targets"], ["busyTargets", "Waiting targets"], ["idleTargets", "Upcoming targets"], ["unknownTargets", "Outdated targets"]])
+        {
+            html += `
+                <div class="stalkerHistory">
+
+                </div>`;
+        }
+
+        this.contentElement.innerHTML += html;
+    }
+    
+    loadImageUrls()
+    {
+        this.images = {};
+        
+        let attack = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="18.01" height="12.7" viewBox="0 0 18.01 12.7"><path data-name="Path 282-2" d="M6.63,4.6v.56a.78.78,0,0,0,.77.77L9.28,6a.79.79,0,0,0,.77-.77A1.23,1.23,0,0,0,10,4.6a.21.21,0,0,0-.07.14h0a.08.08,0,0,1,.07.07h0c0,.07,0,.07-.07.07a1.46,1.46,0,0,1-.7,1,.07.07,0,0,1-.07-.07H9.07c-.14,0-.07-.21-.07-.21l.27-.84A2.61,2.61,0,0,0,9,4L7.4,3.83a.78.78,0,0,0-.77.77ZM.22.42.5.07H.64l.2.35H15.2L15.34,0h.28l.14.42h.49a.31.31,0,0,1,.28.21V2.09l-.07.07v.49a.31.31,0,0,1,.14.28c0,.21-.14.21-.14.21a2.62,2.62,0,0,0-.63.14c-.63.21-.7.83-.56,1.74a5,5,0,0,0,.63,1.67c-.07,0-.07,0-.07.07s.07.07.14.07L16,6.9C16,6.9,16,6.9,16,7S16,7,16.11,7l.07.07c-.07,0-.07,0-.07.07s.07.07.14.07l.07.07c-.07,0-.07,0-.07.07a.21.21,0,0,0,.13.07l.07.07c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.14c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.07-.07.07.07.07.07.14a.08.08,0,0,0-.07.07h0l.07.07.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0l.07.07a.27.27,0,0,0,.07.13h0v.07c0,.07.07.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07v.42a1.29,1.29,0,0,1-.07.7c-.14.28-.7.49-.7.49h-.56V12a1.05,1.05,0,0,1,.28.49c0,.27-.41.2-.41.2H13.74c-.63,0-.56-.41-.56-.41l-.07-.42a2.5,2.5,0,0,1-.35-.21.78.78,0,0,1-.14-.42v-.49a3.38,3.38,0,0,0-.28-.83.8.8,0,0,0-.41-.42c-.14-.07-.07-.14-.07-.14a.81.81,0,0,0,0-.77c-.14-.28-.21-.48-.42-.55s-.14-.21-.14-.21.21-.28-.07-1c-.21-.42-.42-.56-.7-.56a1.68,1.68,0,0,0-.7.21A3.41,3.41,0,0,1,9,6.56L6.28,6.42l-.07-.14.07-.14a2.28,2.28,0,0,0,.13-1,3.46,3.46,0,0,0-.07-.91,1.91,1.91,0,0,0-.55-.42s-4.53-.13-5-.2S.28,3.29.28,3.29.21,2.8.21,2.66V2.38H.14V2h0L.07,1.89A1.61,1.61,0,0,1,0,1.4.9.9,0,0,1,.14.92V.78C.14.71.21.78.21.64A.13.13,0,0,1,.34.5h0L.21.43Z"></path></svg>`);
+        let item = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path d="M10.59,6.67A4,4,0,0,1,10.45,1l.07-.07L9.59,0h3.74V3.74l-.93-.93S9.57,3.93,10.59,6.67ZM8.65,1l-1-1L2.85,2.82l1.33.78ZM16,5.36v7.22L10,16V8.58ZM8.65,7.78l-6.73-4L0,6.43l6.74,4Zm-7.32,1v2.86l7.34,4.18V10L7.11,12.19Z"></path></svg>`);
+        let bazaar = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="16" height="16.2" viewBox="0 0 16 16.2"><path data-name="Path 222-2" d="M3.33,4.13A1.33,1.33,0,0,0,4.67,5.4,1.28,1.28,0,0,0,6,4.17V3.4L6.6.07H5.33l-2,3.33Zm-.66,0V3.4L4.6.07H3.27L0,3.4v.73A1.32,1.32,0,0,0,1.33,5.4,1.29,1.29,0,0,0,2.67,4.17v0ZM12.73,0H11.4l1.93,3.27V4a1.34,1.34,0,0,0,1.34,1.33A1.28,1.28,0,0,0,16,4.1V3.33ZM8,5.4A1.33,1.33,0,0,0,9.33,4.07V3.33L8.6.07H7.33L6.67,3.33v.74A1.33,1.33,0,0,0,8,5.4Zm2-1.33A1.34,1.34,0,0,0,11.33,5.4a1.29,1.29,0,0,0,1.34-1.23V3.4l-2-3.33H9.4L10,3.33ZM.67,16.2H15.33V6.87H.67ZM2,8.2H14v4.67H2Z"></path></svg>`);
+        let points = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Path 295-2" d="M2.14,9A6.86,6.86,0,1,1,9,15.86,6.86,6.86,0,0,1,2.14,9ZM0,9A9,9,0,1,0,9,0,9,9,0,0,0,0,9ZM10,9H8V7h2ZM6,5v8H8V11h2a2,2,0,0,0,2-2V7a2,2,0,0,0-2-2Z"></path></svg>`);
+        
+        this.images.attack = `url("data:image/svg+xml;base64,${attack}")`;
+        this.images.item = `url("data:image/svg+xml;base64,${item}")`;
+        this.images.bazaar = `url("data:image/svg+xml;base64,${bazaar}")`;
+        this.images.points = `url("data:image/svg+xml;base64,${points}")`;
+    }
+    
+    async stalk()
+    {
+        let now = Date.now();
+        
+        if(now > (this.target.timestamp*1000 + 30000))
+        {
+            let targetUpdate = await this.api(`/user/${this.target.player_id}?selections=basic,personalstats,timestamp`, 0);
+            let updateText = "";
+            
+            for(let [statName, oldStatValue] of Object.entries(this.target.personalstats))
+            {
+                if(targetUpdate.personalstats[statName] != oldStatValue)
+                {
+                    if(statName == "attackswon")
+                    {
+                        let attacksWon = targetUpdate.personalstats["attackswon"] - this.target.personalstats["attackswon"];
+                        let respectGained = targetUpdate.personalstats["respectforfaction"] - this.target.personalstats["respectforfaction"];
+                        let newElo = targetUpdate.personalstats["elo"];
+                        let eloGained = targetUpdate.personalstats["elo"] - this.target.personalstats["elo"];
+                        let newKillStreak = targetUpdate.personalstats["killstreak"];
+                        
+                        updateText += `<li class="stalkerAttack">Won ${attacksWon} attack${attacksWon == 1 ? "" : "s"}, gained ${respectGained} respect, increased Elo by ${eloGained} to ${newElo.toLocaleString()} and has a new kill streak of ${newKillStreak.toLocaleString()}</li>`;
+                    }
+                    else if(statName == "attackslost")
+                    {
+                        let attacksLost = targetUpdate.personalstats["attackslost"] - this.target.personalstats["attackslost"];
+                        let eloLost = this.target.personalstats["elo"] - targetUpdate.personalstats["elo"];
+                        let newElo = targetUpdate.personalstats["elo"];
+                        let oldKillStreak = this.target.personalstats["killstreak"];
+                        
+                        updateText += `<li class="stalkerAttack">Lost ${attacksWon} attack${attacksWon == 1 ? "" : "s"}, decreased Elo by ${eloLost} to ${newElo.toLocaleString()} and has reset a kill streak of ${oldKillStreak.toLocaleString()}</li>`;
+                    }
+                    else if(statName == "medicalitemsused")
+                    {
+                        let medicalItemsUsed = targetUpdate.personalstats["medicalitemsused"] - this.target.personalstats["medicalitemsused"];
+                        
+                        updateText += `<li class="stalkerItem">Used ${medicalItemsUsed} medical item${medicalItemsUsed == 1 ? "" : "s"}</li>`;
+                    }
+                    else if(statName == "refills")
+                    {
+                        let energyRefills  = targetUpdate.personalstats["refills"] - this.target.personalstats["refills"];
+                        
+                        updateText += `<li class="stalkerPoints">Used ${energyRefills == 1 ? "an" : energyRefills} Energy Refill${energyRefills == 1 ? "" : "s"}</li>`;
+                    }
+                    else if(statName == "nerverefills")
+                    {
+                        let nerveRefills  = targetUpdate.personalstats["nerverefills"] - this.target.personalstats["nerverefills"];
+                        
+                        updateText += `<li class="stalkerPoints">Used ${nerveRefills == 1 ? "a" : nerveRefills} Nerve Refill${nerveRefills == 1 ? "" : "s"}</li>`;
+                    }
+                    else if(statName == "tokenrefills")
+                    {
+                        let tokenRefills  = targetUpdate.personalstats["tokenrefills"] - this.target.personalstats["tokenrefills"];
+                        
+                        updateText += `<li class="stalkerPoints">Used ${tokenRefills == 1 ? "a" : tokenRefills} Token Refill${tokenRefills == 1 ? "" : "s"}</li>`;
+                    }
+                }
+            }
+
+            if(updateText.length > 0)
+            {
+                let div = document.createElement("div");
+                div.className = "stalkerRow";
+                div.innerHTML = `
+                    <div class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.target.timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</div>
+                    <hr/>
+                    <ul class="stalkerText">${updateText}</ul>
+                `;
+                
+                document.querySelector(".stalkerHistory").prepend(div);
+            }
+            
+            document.querySelectorAll(".stalkerTime").forEach(e => 
+            {
+                e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp)) + " ago";
+            });
+            
+            this.target = targetUpdate;
+        }
+        
+        setTimeout(this.stalk.bind(this), 1000);
     }
 }
 
@@ -4155,3 +4369,5 @@ class SettingsModule extends BaseModule
 }
 
 let settings = new SettingsModule();
+
+//let stalker = new StalkerModule();
