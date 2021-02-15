@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.47
+// @version      1.48
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -77,6 +77,8 @@ class Utils
     
     static formatTime(seconds)
     {
+        seconds = Math.max(0, seconds);
+        
         var hours = parseInt(seconds/3600);
         seconds -= hours*3600;
 
@@ -997,7 +999,7 @@ class ChainTargetsModule extends BaseModule
             nextTarget.lastUpdate = json.timestamp*1000;
             nextTarget.lastAction = json.last_action;
             nextTarget.respectGain = (Math.log(nextTarget.level) + 1)/4;
-            nextTarget.knowsFairFight = false;
+            nextTarget.knowsFairFight = !!nextTarget.fairFight;
             nextTarget.life = json.life;
             
             if(this.attackLog.hasOwnProperty(nextTarget.id))
@@ -3230,11 +3232,43 @@ class PowerLevelModule extends BaseModule
     }
 }
 
-class StalkerModule extends BaseModule
+class ActivityStalkerModule extends BaseModule
 {
     constructor()
     {
         super("&page=Stalker");
+        
+        if(document.location.href.includes("/profiles.php?XID"))
+        {
+            this.addAjaxListener("getProfileData", false, (json) => 
+            {
+                let newButton = 
+                {
+                    actionDescription: "Stalk", 
+                    link: document.location.href + "&page=Stalker", 
+                    message: `Start stalking ${json.user.playerName}`,
+                    state: "active"
+                };
+
+                let newButtonsObject = {};
+                
+                for(let [name, button] of Object.entries(json.profileButtons.buttons))
+                {
+                    newButtonsObject[name] = button;
+                    
+                    if(name == "personalStats")
+                    {
+                        newButtonsObject.stalk = newButton;
+                    }
+                }
+                
+                json.profileButtons.buttons = newButtonsObject;
+
+                return json;
+            });
+            
+            this.modifyProfileButton();
+        }
         
         this.ready();
     }
@@ -3246,25 +3280,61 @@ class StalkerModule extends BaseModule
             this.contentElement = element;
             this.contentElement.classList.add("stalkerContainer");
             
-            let targetId = document.location.href.split("XID=")[1].split("&")[0];
+            this.targetId = document.location.href.split("XID=")[1].split("&")[0];
+            this.targets = JSON.parse(localStorage.getItem("AquaTools_Stalker_targets") || "{}");
             
-            this.target = await this.api(`/user/${targetId}?selections=basic,personalstats,timestamp`, 0);
+            if(this.targets.hasOwnProperty(this.targetId))
+            {
+                this.target = this.targets[this.targetId];
+            }
+            else
+            {
+                this.target = await this.api(`/user/${this.targetId}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                this.targets[this.targetId] = this.target;
+            }
+            
+            if(!this.target.hasOwnProperty("stalkerEvents"))
+            {
+                this.target.stalkerEvents = [];
+            }
+            
+            localStorage.setItem("AquaTools_Stalker_targets", JSON.stringify(this.targets));
             
             this.loadImageUrls();
             this.addStyle();
             this.addHeader();
             this.addBody();
+            this.addStalkerEvents();
             
             this.stalk();
         });
     }
     
+    async modifyProfileButton()
+    {
+        let button;
+        
+        while(!(button = document.querySelector(".profile-button-stalk")))
+        {
+            await Utils.sleep(100);
+        }
+        
+        let buttonSVG = `<svg viewBox="-2 -2 36 36" xmlns="http://www.w3.org/2000/svg"><defs><style>.cls-1{fill:#101820;}</style></defs><title/><g data-name="Layer 3" id="Layer_3"><path class="cls-1" d="M11,22A10,10,0,1,1,21,12,10,10,0,0,1,11,22ZM11,4a8,8,0,1,0,8,8A8,8,0,0,0,11,4Z"/><path class="cls-1" d="M28,29.74a3,3,0,0,1-1.93-.7L19.94,23.9a3,3,0,0,1,3.86-4.6l6.13,5.14A3,3,0,0,1,28,29.74ZM21.87,20.6h-.09a1,1,0,0,0-.55,1.77l6.13,5.14a1,1,0,0,0,1.41-.12,1,1,0,0,0,.23-.73,1,1,0,0,0-.36-.68l-6.13-5.15A1,1,0,0,0,21.87,20.6Z"/><path class="cls-1" d="M20,21a1,1,0,0,1-.64-.23L17,18.82a1,1,0,0,1,1.28-1.54l2.34,1.95a1,1,0,0,1,.13,1.41A1,1,0,0,1,20,21Z"/></g></svg>`;
+        
+        button.innerHTML = buttonSVG;
+    }
+    
     addStyle()
     {
-        GM_addStyle(`
+        let style = `
         .stalkerHistory *
         {
             all: revert;
+        }
+        
+        .stalkerHistory a
+        {
+            color: var(--default-color);
         }
         
         .stalkerRow
@@ -3277,40 +3347,43 @@ class StalkerModule extends BaseModule
         .stalkerTime
         {
             font-weight: 600;
+            text-align: center;
+            margin: 2px 0;
+        }
+        
+        ul.stalkerText
+        {
+            padding-left: 10px;
         }
         
         ul.stalkerText li
         {
+            list-style-type: none;
             margin-bottom: 5px;
+            padding-left: 22px;
+            line-height: 20px;
         }
         
-        .stalkerAttack
+        `;
+        
+        for(let [name, image] of Object.entries(this.images))
         {
-            list-style-image: ${this.images.attack};
+            style += `
+                .stalker${name[0].toUpperCase() + name.slice(1)}
+                {
+                    background: url("data:image/svg+xml;base64,${window.btoa(image)}") no-repeat left center;
+                }
+            `;
         }
         
-        .stalkerItem
-        {
-            list-style-image: ${this.images.item};
-        }
-        
-        .stalkerBazaar
-        {
-            list-style-image: ${this.images.bazaar};
-        }
-        
-        .stalkerPoints
-        {
-            list-style-image: ${this.images.points};
-        }
-        `);
+        GM_addStyle(style);
     }
     
     addHeader()
     {
         this.contentElement.innerHTML = `
         <div class="content-title m-bottom10">
-            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Stalker - ${this.target.name}</h4>
+            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Activity Stalker - ${this.target.name} [${this.targetId}]</h4>
         <div class="clear"></div>
         <hr class="page-head-delimiter">
         </div>
@@ -3332,77 +3405,112 @@ class StalkerModule extends BaseModule
         this.contentElement.innerHTML += html;
     }
     
+    addStalkerEvents()
+    {
+        let history = document.querySelector(".stalkerHistory");
+        
+        for(let event of this.target.stalkerEvents.sort((a, b) => b.timestamp - a.timestamp))
+        {
+            history.innerHTML += event.outerHTML;
+        }
+        
+        document.querySelectorAll(".stalkerTime").forEach(e => 
+        {
+            e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp)) + " ago";
+        });
+    }
+    
     loadImageUrls()
     {
-        this.images = {};
+        let greenColor = "#d8f5a2";
+        let redColor = "#ffa8a8";
+        let originalColor = "#ffffff"
         
-        let attack = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="18.01" height="12.7" viewBox="0 0 18.01 12.7"><path data-name="Path 282-2" d="M6.63,4.6v.56a.78.78,0,0,0,.77.77L9.28,6a.79.79,0,0,0,.77-.77A1.23,1.23,0,0,0,10,4.6a.21.21,0,0,0-.07.14h0a.08.08,0,0,1,.07.07h0c0,.07,0,.07-.07.07a1.46,1.46,0,0,1-.7,1,.07.07,0,0,1-.07-.07H9.07c-.14,0-.07-.21-.07-.21l.27-.84A2.61,2.61,0,0,0,9,4L7.4,3.83a.78.78,0,0,0-.77.77ZM.22.42.5.07H.64l.2.35H15.2L15.34,0h.28l.14.42h.49a.31.31,0,0,1,.28.21V2.09l-.07.07v.49a.31.31,0,0,1,.14.28c0,.21-.14.21-.14.21a2.62,2.62,0,0,0-.63.14c-.63.21-.7.83-.56,1.74a5,5,0,0,0,.63,1.67c-.07,0-.07,0-.07.07s.07.07.14.07L16,6.9C16,6.9,16,6.9,16,7S16,7,16.11,7l.07.07c-.07,0-.07,0-.07.07s.07.07.14.07l.07.07c-.07,0-.07,0-.07.07a.21.21,0,0,0,.13.07l.07.07c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.14c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.07-.07.07.07.07.07.14a.08.08,0,0,0-.07.07h0l.07.07.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0l.07.07a.27.27,0,0,0,.07.13h0v.07c0,.07.07.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07v.42a1.29,1.29,0,0,1-.07.7c-.14.28-.7.49-.7.49h-.56V12a1.05,1.05,0,0,1,.28.49c0,.27-.41.2-.41.2H13.74c-.63,0-.56-.41-.56-.41l-.07-.42a2.5,2.5,0,0,1-.35-.21.78.78,0,0,1-.14-.42v-.49a3.38,3.38,0,0,0-.28-.83.8.8,0,0,0-.41-.42c-.14-.07-.07-.14-.07-.14a.81.81,0,0,0,0-.77c-.14-.28-.21-.48-.42-.55s-.14-.21-.14-.21.21-.28-.07-1c-.21-.42-.42-.56-.7-.56a1.68,1.68,0,0,0-.7.21A3.41,3.41,0,0,1,9,6.56L6.28,6.42l-.07-.14.07-.14a2.28,2.28,0,0,0,.13-1,3.46,3.46,0,0,0-.07-.91,1.91,1.91,0,0,0-.55-.42s-4.53-.13-5-.2S.28,3.29.28,3.29.21,2.8.21,2.66V2.38H.14V2h0L.07,1.89A1.61,1.61,0,0,1,0,1.4.9.9,0,0,1,.14.92V.78C.14.71.21.78.21.64A.13.13,0,0,1,.34.5h0L.21.43Z"></path></svg>`);
-        let item = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path d="M10.59,6.67A4,4,0,0,1,10.45,1l.07-.07L9.59,0h3.74V3.74l-.93-.93S9.57,3.93,10.59,6.67ZM8.65,1l-1-1L2.85,2.82l1.33.78ZM16,5.36v7.22L10,16V8.58ZM8.65,7.78l-6.73-4L0,6.43l6.74,4Zm-7.32,1v2.86l7.34,4.18V10L7.11,12.19Z"></path></svg>`);
-        let bazaar = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="16" height="16.2" viewBox="0 0 16 16.2"><path data-name="Path 222-2" d="M3.33,4.13A1.33,1.33,0,0,0,4.67,5.4,1.28,1.28,0,0,0,6,4.17V3.4L6.6.07H5.33l-2,3.33Zm-.66,0V3.4L4.6.07H3.27L0,3.4v.73A1.32,1.32,0,0,0,1.33,5.4,1.29,1.29,0,0,0,2.67,4.17v0ZM12.73,0H11.4l1.93,3.27V4a1.34,1.34,0,0,0,1.34,1.33A1.28,1.28,0,0,0,16,4.1V3.33ZM8,5.4A1.33,1.33,0,0,0,9.33,4.07V3.33L8.6.07H7.33L6.67,3.33v.74A1.33,1.33,0,0,0,8,5.4Zm2-1.33A1.34,1.34,0,0,0,11.33,5.4a1.29,1.29,0,0,0,1.34-1.23V3.4l-2-3.33H9.4L10,3.33ZM.67,16.2H15.33V6.87H.67ZM2,8.2H14v4.67H2Z"></path></svg>`);
-        let points = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#d8f5a2" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Path 295-2" d="M2.14,9A6.86,6.86,0,1,1,9,15.86,6.86,6.86,0,0,1,2.14,9ZM0,9A9,9,0,1,0,9,0,9,9,0,0,0,0,9ZM10,9H8V7h2ZM6,5v8H8V11h2a2,2,0,0,0,2-2V7a2,2,0,0,0-2-2Z"></path></svg>`);
+        this.images = 
+        {
+            attack: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18.01" height="12.7" viewBox="0 0 18.01 12.7"><path data-name="Path 282-2" d="M6.63,4.6v.56a.78.78,0,0,0,.77.77L9.28,6a.79.79,0,0,0,.77-.77A1.23,1.23,0,0,0,10,4.6a.21.21,0,0,0-.07.14h0a.08.08,0,0,1,.07.07h0c0,.07,0,.07-.07.07a1.46,1.46,0,0,1-.7,1,.07.07,0,0,1-.07-.07H9.07c-.14,0-.07-.21-.07-.21l.27-.84A2.61,2.61,0,0,0,9,4L7.4,3.83a.78.78,0,0,0-.77.77ZM.22.42.5.07H.64l.2.35H15.2L15.34,0h.28l.14.42h.49a.31.31,0,0,1,.28.21V2.09l-.07.07v.49a.31.31,0,0,1,.14.28c0,.21-.14.21-.14.21a2.62,2.62,0,0,0-.63.14c-.63.21-.7.83-.56,1.74a5,5,0,0,0,.63,1.67c-.07,0-.07,0-.07.07s.07.07.14.07L16,6.9C16,6.9,16,6.9,16,7S16,7,16.11,7l.07.07c-.07,0-.07,0-.07.07s.07.07.14.07l.07.07c-.07,0-.07,0-.07.07a.21.21,0,0,0,.13.07l.07.07c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.14c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.07-.07.07.07.07.07.14a.08.08,0,0,0-.07.07h0l.07.07.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0l.07.07a.27.27,0,0,0,.07.13h0v.07c0,.07.07.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07v.42a1.29,1.29,0,0,1-.07.7c-.14.28-.7.49-.7.49h-.56V12a1.05,1.05,0,0,1,.28.49c0,.27-.41.2-.41.2H13.74c-.63,0-.56-.41-.56-.41l-.07-.42a2.5,2.5,0,0,1-.35-.21.78.78,0,0,1-.14-.42v-.49a3.38,3.38,0,0,0-.28-.83.8.8,0,0,0-.41-.42c-.14-.07-.07-.14-.07-.14a.81.81,0,0,0,0-.77c-.14-.28-.21-.48-.42-.55s-.14-.21-.14-.21.21-.28-.07-1c-.21-.42-.42-.56-.7-.56a1.68,1.68,0,0,0-.7.21A3.41,3.41,0,0,1,9,6.56L6.28,6.42l-.07-.14.07-.14a2.28,2.28,0,0,0,.13-1,3.46,3.46,0,0,0-.07-.91,1.91,1.91,0,0,0-.55-.42s-4.53-.13-5-.2S.28,3.29.28,3.29.21,2.8.21,2.66V2.38H.14V2h0L.07,1.89A1.61,1.61,0,0,1,0,1.4.9.9,0,0,1,.14.92V.78C.14.71.21.78.21.64A.13.13,0,0,1,.34.5h0L.21.43Z"></path></svg>`, 
+            item: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path d="M10.59,6.67A4,4,0,0,1,10.45,1l.07-.07L9.59,0h3.74V3.74l-.93-.93S9.57,3.93,10.59,6.67ZM8.65,1l-1-1L2.85,2.82l1.33.78ZM16,5.36v7.22L10,16V8.58ZM8.65,7.78l-6.73-4L0,6.43l6.74,4Zm-7.32,1v2.86l7.34,4.18V10L7.11,12.19Z"></path></svg>`, 
+            bazaar: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16.2" viewBox="0 0 16 16.2"><path data-name="Path 222-2" d="M3.33,4.13A1.33,1.33,0,0,0,4.67,5.4,1.28,1.28,0,0,0,6,4.17V3.4L6.6.07H5.33l-2,3.33Zm-.66,0V3.4L4.6.07H3.27L0,3.4v.73A1.32,1.32,0,0,0,1.33,5.4,1.29,1.29,0,0,0,2.67,4.17v0ZM12.73,0H11.4l1.93,3.27V4a1.34,1.34,0,0,0,1.34,1.33A1.28,1.28,0,0,0,16,4.1V3.33ZM8,5.4A1.33,1.33,0,0,0,9.33,4.07V3.33L8.6.07H7.33L6.67,3.33v.74A1.33,1.33,0,0,0,8,5.4Zm2-1.33A1.34,1.34,0,0,0,11.33,5.4a1.29,1.29,0,0,0,1.34-1.23V3.4l-2-3.33H9.4L10,3.33ZM.67,16.2H15.33V6.87H.67ZM2,8.2H14v4.67H2Z"></path></svg>`, 
+            points: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Path 295-2" d="M2.14,9A6.86,6.86,0,1,1,9,15.86,6.86,6.86,0,0,1,2.14,9ZM0,9A9,9,0,1,0,9,0,9,9,0,0,0,0,9ZM10,9H8V7h2ZM6,5v8H8V11h2a2,2,0,0,0,2-2V7a2,2,0,0,0-2-2Z"></path></svg>`, 
+            crime: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path d="M7.1,14.81a17.77,17.77,0,0,1-3.87,1.82.68.68,0,0,1-.54-.05.62.62,0,0,1-.32-.6.64.64,0,0,1,.43-.54C6.27,14.3,9.24,12.14,10.59,9a2.05,2.05,0,0,0-1-2.72,1.94,1.94,0,0,0-1-.17A2.31,2.31,0,0,0,6.33,7.59c-.8,1.85-2.82,3.32-5.52,4.08A.65.65,0,0,1,0,11.23a.77.77,0,0,1,0-.15.63.63,0,0,1,.48-.63c2.31-.65,4-1.85,4.65-3.35A3.72,3.72,0,0,1,10,5.18,3.65,3.65,0,0,1,11.56,6.4a3.13,3.13,0,0,1,.23,3.1,11,11,0,0,1-1.95,3A12.88,12.88,0,0,1,7.1,14.8ZM1,14.36c3.47-.82,6.78-2.72,8.16-5.92a.62.62,0,0,0-.33-.82h0A.65.65,0,0,0,8,8C7,10.41,4.27,12.3.75,13.13a.63.63,0,0,0-.5.74.63.63,0,0,0,.74.5Zm15.57.92a.6.6,0,0,0,.2-.56.61.61,0,0,0-.38-.47,3.5,3.5,0,0,1-1.72-1.18,3.86,3.86,0,0,1-.09-2.76c.28-1.54.63-3.46-.76-5.4A6.22,6.22,0,0,0,9.42,2.42,6.79,6.79,0,0,0,4.19,4.1,6.74,6.74,0,0,0,2.91,5.78a3.65,3.65,0,0,1-2.32,2A.63.63,0,0,0,.71,9,.65.65,0,0,0,1,9,4.79,4.79,0,0,0,4,6.42,5.53,5.53,0,0,1,5.07,5a5.39,5.39,0,0,1,4.2-1.35,4.92,4.92,0,0,1,3.52,1.95c1.08,1.51.81,3,.55,4.46a4.86,4.86,0,0,0,.26,3.65,4.59,4.59,0,0,0,2.27,1.65.72.72,0,0,0,.73-.11Zm-8.8.91c-.3.17-.67.38-1.15.61a.64.64,0,0,0-.35.67.66.66,0,0,0,.76.52l.17,0c.31-.16.58-.3.82-.44.93-.51,1-.52,1.9.11l.35.25a.67.67,0,0,0,.48.1.65.65,0,0,0,.52-.49.62.62,0,0,0-.27-.65c-.37-.26-.65-.47-.86-.63-.87-.68-1.16-.7-2.38,0ZM1.16,4.91A.57.57,0,0,0,2,4.77H2l.39-.56A7.56,7.56,0,0,1,9.67,1.34c2.89.37,5.26,2,6,4.1a8.17,8.17,0,0,1,.2,4.62c-.19,1-.35,2,.22,2.69a2.34,2.34,0,0,0,1,.7.64.64,0,0,0,.81-.36.54.54,0,0,0,0-.22.67.67,0,0,0-.43-.62,1,1,0,0,1-.41-.27c-.23-.29-.12-.92,0-1.71A9.33,9.33,0,0,0,16.93,5C16,2.45,13.2.52,9.84.09A10.39,10.39,0,0,0,8.47,0,8.79,8.79,0,0,0,1.92,2.7,4.82,4.82,0,0,0,1,4.08a.6.6,0,0,0,.17.83h0Zm10.63,8.81a.66.66,0,0,0-.88-.23.62.62,0,0,0-.26.84v0a7,7,0,0,0,2.77,2.56.69.69,0,0,0,.61,0h0a.63.63,0,0,0,.3-.83.57.57,0,0,0-.27-.28,5.77,5.77,0,0,1-2.28-2.1Z"></path></svg>`, 
+            hospital: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path data-name="Path 1-2" d="M6,0V6H0v4H6v6h4V10h6V6H10V0Z"></path></svg>`, 
+            flying: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.99" height="14.93" viewBox="0 0 15.99 14.93"><path data-name="Path 5-2" d="M15.2.05a1.29,1.29,0,0,0-1,.35L11.09,3.05a1.3,1.3,0,0,1-1.16.2L9.18,3a.52.52,0,0,1-.34-.65.51.51,0,0,1,.09-.16l.53-.78a.22.22,0,0,0,0-.32h0a.89.89,0,0,0-.8-.15,1.34,1.34,0,0,0-.4.27l-.54.59a1.37,1.37,0,0,1-1.14.38L5.28,1.89c-.37-.07-.51-.35-.31-.62L5.34.78A.6.6,0,0,0,5.48.36C5.45.11,5-.06,4.7,0a2.45,2.45,0,0,0-1,.71L3.64.86a1.67,1.67,0,0,1-1.14.49l-1.07,0c-.38,0-.85-.16-1.08-.14A.37.37,0,0,0,0,1.41a.7.7,0,0,0,0,.38c.06.21.52.43.85.61,1.47.8,4.62,2.46,5.94,3.15a.44.44,0,0,1,.25.57.39.39,0,0,1-.16.2L3.13,9.67A1.48,1.48,0,0,1,2,10l-.39-.1a2.27,2.27,0,0,0-1-.1,1.29,1.29,0,0,0-.58.68c-.07.33.46.72.81.86A3.44,3.44,0,0,1,2.06,12a4,4,0,0,1,.8,1.37c.13.35.35.88.62.84A.84.84,0,0,0,3.91,14l.21-.24a1.17,1.17,0,0,0,.06-.9l-.06-.24a1.17,1.17,0,0,1,.37-1.1L8.8,7.93a.48.48,0,0,1,.69,0,.42.42,0,0,1,.11.18l2.72,6.23c.15.34.69.81.81.45a2.69,2.69,0,0,0,0-1.13l-.07-.61a1.37,1.37,0,0,1,.47-1l.88-.7a1.14,1.14,0,0,0,.36-.53c.1-.34-.18-.8-.4-.77a5.81,5.81,0,0,0-.92.4c-.3.14-.57-.05-.6-.42l0-.69a1.26,1.26,0,0,1,.53-1.05l.23-.14a2.34,2.34,0,0,0,.91-1h0A.72.72,0,0,0,14,6.33a4.88,4.88,0,0,0-1.13.26.56.56,0,0,1-.7-.38.59.59,0,0,1,0-.13l0-.35a1.53,1.53,0,0,1,.43-1.14l2.73-2.5A2.35,2.35,0,0,0,16,1a.66.66,0,0,0,0-.14A.88.88,0,0,0,15.2.05Z"></path></svg>`, 
+            misc: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14" height="13.96" viewBox="0 0 14 13.96"><path data-name="Union 21-2" d="M2.78,12.55h0A7.38,7.38,0,0,1,1.56,11.4L0,13V7.29c0-.1,0-.2,0-.3H6L4.15,8.81a3.39,3.39,0,0,0,2.59,1.55.73.73,0,0,0,.25,0,3.13,3.13,0,0,0,2-.63A3.53,3.53,0,0,0,10,8.6l2.57,2.59a7,7,0,0,1-9.78,1.36ZM14,7H8L9.85,5.15a3.34,3.34,0,0,0-2-1.46c0-1.82,0-3,0-3.64a7,7,0,0,1,4.58,2.52L14,1V6.67c0,.11,0,.2,0,.3ZM.06,6.11A7,7,0,0,1,2.57,1.57L1,0H7C7,1.11,7,3.86,7,6L5.15,4.15a3.39,3.39,0,0,0-1.45,2H.06Z"></path></svg>`, 
+            jail: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16.06" height="16" viewBox="0 0 16.06 16"><path data-name="Path 3-2" d="M10.88,0V16h1.88V0ZM6.18,11.82H9.94V9.94H6.18ZM0,11.82H2.41V9.94H0Zm13.71,0h2.35V9.94H13.71ZM6.18,6.18H9.94V4.29H6.18ZM0,6.18H2.41V4.29H0Zm13.71,0h2.35V4.29H13.71ZM3.35,0V16H5.24V0Z"></path></svg>`, 
+            drug: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="17" viewBox="0 0 16 17"><path data-name="Path 416-2" d="M16,9.6a9.4,9.4,0,0,0-5.1,1.8,16.8,16.8,0,0,0,3.3-8.3,16.68,16.68,0,0,0-5.3,8.4A18.3,18.3,0,0,0,8,0a17.91,17.91,0,0,0-.8,11.6A17.89,17.89,0,0,0,1.8,3.1a16.8,16.8,0,0,0,3.3,8.3A9.4,9.4,0,0,0,0,9.6a9.22,9.22,0,0,0,3.8,3.6,4.25,4.25,0,0,0-1.4,1.3s2.8,0,4-1.9c.2,0,.6,1.7.6,1.8v2.1a.47.47,0,0,0,.44.5H7.7a.47.47,0,0,0,.5-.44V14.4s.3-1.7.6-1.8c1.3,1.9,4.6,1.9,4.6,1.9A4.25,4.25,0,0,0,12,13.2,9,9,0,0,0,16,9.6Z"></path></svg>`, 
+            upgrade: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14.67" height="16" viewBox="0 0 14.67 16"><path d="M10.67,14.67V16H4V14.67Zm0-2.67H4v1.33h6.67ZM4,7.33v3.34h6.67V7.33h4L7.33,0,0,7.33Z"></path></svg>`, 
+            contract: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="14.66" viewBox="0 0 16 14.66"><path data-name="Path 37-2" d="M4,6.67a2.66,2.66,0,0,0,5.18.84l1.48-.86v0a4,4,0,1,1-2-3.47l-1.48.86A2.65,2.65,0,0,0,4.05,6.15a2.24,2.24,0,0,0,0,.52ZM6.67,5.34A1.33,1.33,0,1,0,8,6.67H8l2.24-1.3a3,3,0,0,1,2.47.11L16,3.56,13.9,2.51,14,.09,10.71,2A3,3,0,0,1,9.57,4.2L7.31,5.51a1.3,1.3,0,0,0-.64-.17Zm6.63,1.9A1.39,1.39,0,0,0,12,6.61v.06a5.36,5.36,0,1,1-2.64-4.6A1.83,1.83,0,0,0,9.46.62a6.66,6.66,0,0,0-7.24,11l-.87,2.7a.26.26,0,0,0,.17.33.25.25,0,0,0,.26-.06l2-1.92a6.64,6.64,0,0,0,5.77,0l2,1.92a.27.27,0,0,0,.37,0,.25.25,0,0,0,.06-.26l-.87-2.7a6.65,6.65,0,0,0,2.2-4.38Z"></path></svg>`, 
+            message: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.99" height="14.67" viewBox="0 0 15.99 14.67"><path data-name="Path 71-2" d="M13.07,13.74c-3.36.82-5.8-1.24-5.8-3.44s2.07-3.65,4.36-3.65S16,8.19,16,10.3a3.2,3.2,0,0,1-.74,2A5.82,5.82,0,0,0,16,14.67,10.68,10.68,0,0,1,13.07,13.74ZM5.93,10.3c0-2.75,2.56-5,5.7-5a6.45,6.45,0,0,1,1.7.23C13.32,2.32,10.16,0,6.67,0S0,2.35,0,5.57A4.86,4.86,0,0,0,1.14,8.7,8.73,8.73,0,0,1,0,12.24a16,16,0,0,0,4.43-1.41A10.19,10.19,0,0,0,6,11.07a4.9,4.9,0,0,1-.08-.77Z"></path></svg>`, 
+            money: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14.67" height="16" viewBox="0 0 14.67 16"><path d="M10.67,8a4,4,0,1,0,4,4A4,4,0,0,0,10.67,8ZM11,13.65V14h-.33v-.33a2.45,2.45,0,0,1-1-.24l.15-.55a2.08,2.08,0,0,0,1.07.18c.39-.09.47-.48,0-.67s-1.26-.27-1.26-1.08a1,1,0,0,1,1-1V10H11v.34a3.13,3.13,0,0,1,.81.14l-.12.55a2.05,2.05,0,0,0-.81-.16c-.5,0-.54.46-.19.64.57.27,1.31.47,1.31,1.18S11.55,13.57,11,13.65Zm1.08-6.79A4.46,4.46,0,0,0,14,6.07V6.5a1.14,1.14,0,0,1-.67.89A5.11,5.11,0,0,0,12.08,6.86ZM10.67,3C12.45,3,14,2.33,14,1.5S12.45,0,10.67,0,7.33.67,7.33,1.5,8.89,3,10.67,3Zm.06-1.34c-.2-.06-.81-.11-.81-.45,0-.19.22-.36.64-.4V.67h.21V.81a2.39,2.39,0,0,1,.53.06l-.08.23A1.91,1.91,0,0,0,10.75,1H10.7c-.32,0-.35.19-.13.27s.85.19.85.49-.29.36-.65.4v.15h-.21V2.19a2.3,2.3,0,0,1-.64-.09l.1-.23a2.61,2.61,0,0,0,.55.08h.14c.25,0,.3-.2,0-.28Zm-7.4,8.67A5.67,5.67,0,0,0,5.8,9.82a5.5,5.5,0,0,1,.8-1.26c-.3-.7-1.69-1.23-3.27-1.23C1.55,7.33,0,8,0,8.83s1.55,1.5,3.33,1.5ZM3.4,9c-.2-.06-.81-.11-.81-.45,0-.18.22-.35.64-.4V8h.21v.14A2.39,2.39,0,0,1,4,8.2l-.08.23a2.54,2.54,0,0,0-.47-.07H3.36c-.32,0-.34.19-.12.27s.84.19.84.49-.29.37-.64.4v.15H3.22V9.53a2.37,2.37,0,0,1-.64-.1l.1-.23a2.1,2.1,0,0,0,.56.08h.13C3.62,9.24,3.67,9.07,3.4,9Zm2.67,5.69a5.32,5.32,0,0,1-2.73.65c-1.78,0-3.33-.67-3.33-1.5V13.4a5.69,5.69,0,0,0,3.33.94,7.06,7.06,0,0,0,2.36-.41,5.17,5.17,0,0,0,.36.75ZM0,12.17v-.44a5.64,5.64,0,0,0,3.33.94,7.2,7.2,0,0,0,2-.29,4.8,4.8,0,0,0,.15.91,6.2,6.2,0,0,1-2.17.38C1.55,13.67,0,13,0,12.17ZM0,10.5v-.44A5.57,5.57,0,0,0,3.33,11a7,7,0,0,0,2.18-.34,4.93,4.93,0,0,0-.16,1,6.28,6.28,0,0,1-2,.32C1.55,12,0,11.33,0,10.5ZM7.33,3.17V2.73a5.65,5.65,0,0,0,3.34.94A5.64,5.64,0,0,0,14,2.73v.44c0,.83-1.55,1.5-3.33,1.5S7.33,4,7.33,3.17Zm0,3.33V6.07a4.65,4.65,0,0,0,1.92.8A5,5,0,0,0,8,7.39,1.16,1.16,0,0,1,7.33,6.5Zm0-1.67V4.4a5.64,5.64,0,0,0,3.34.93A5.63,5.63,0,0,0,14,4.4v.43c0,.83-1.55,1.5-3.33,1.5S7.33,5.66,7.33,4.83Z"></path></svg>`, 
+            company: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15" height="16" viewBox="0 0 15 16"><path data-name="Path 430-2" d="M7,5H0V16H7ZM3,14H1V13H3Zm3,0H4V13H6ZM3,12H1V11H3Zm3,0H4V11H6ZM3,10H1V9H3Zm3,0H4V9H6ZM3,8H1V7H3ZM6,8H4V7H6Zm4-7h3V2H10Zm3,3H10V3h3ZM12,5h2V6H12ZM9,5h2V6H9Zm3,2h2V8H12ZM9,7h2V8H9Zm3,2h2v1H12ZM9,9h2v1H9Zm3,2h2v1H12ZM9,11h2v1H9Zm3,2h2v1H12ZM9,13h2v1H9ZM8,4V16h7V4H14V1h1V0H8V1H9V4Z"></path></svg>`
+        }
         
-        this.images.attack = `url("data:image/svg+xml;base64,${attack}")`;
-        this.images.item = `url("data:image/svg+xml;base64,${item}")`;
-        this.images.bazaar = `url("data:image/svg+xml;base64,${bazaar}")`;
-        this.images.points = `url("data:image/svg+xml;base64,${points}")`;
+        Object.entries(this.images).forEach(e => 
+        {
+            this.images[e[0] + "Green"] = e[1].replace(`fill="${originalColor}"`, `fill="${greenColor}"`);
+            this.images[e[0] + "Red"] = e[1].replace(`fill="${originalColor}"`, `fill="${redColor}"`);
+        });
     }
     
     async stalk()
     {
         let now = Date.now();
         
-        if(now > (this.target.timestamp*1000 + 30000))
+        while(now > (this.target.timestamp*1000 + 30000))
         {
-            let targetUpdate = await this.api(`/user/${this.target.player_id}?selections=basic,personalstats,timestamp`, 0);
+            let targetUpdate = await this.api(`/user/${this.target.player_id}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
             let updateText = "";
+            
+            //For code 9, "API disabled"
+            if(!targetUpdate.personalstats)
+            {
+                await Utils.sleep(29000);
+                break;
+            }
+            
+            for(let [statName, oldStatValue] of Object.entries(this.target.last_action))
+            {
+                if(targetUpdate.last_action[statName] != oldStatValue)
+                {
+                    updateText += this.handleActionEvents(statName, targetUpdate);
+                }
+            }
+            
+            for(let [statName, oldStatValue] of Object.entries(this.target.criminalrecord))
+            {
+                if(targetUpdate.criminalrecord[statName] != oldStatValue)
+                {
+                    updateText += this.handleCrimeEvents(statName, targetUpdate);
+                }
+            }
             
             for(let [statName, oldStatValue] of Object.entries(this.target.personalstats))
             {
                 if(targetUpdate.personalstats[statName] != oldStatValue)
                 {
-                    if(statName == "attackswon")
-                    {
-                        let attacksWon = targetUpdate.personalstats["attackswon"] - this.target.personalstats["attackswon"];
-                        let respectGained = targetUpdate.personalstats["respectforfaction"] - this.target.personalstats["respectforfaction"];
-                        let newElo = targetUpdate.personalstats["elo"];
-                        let eloGained = targetUpdate.personalstats["elo"] - this.target.personalstats["elo"];
-                        let newKillStreak = targetUpdate.personalstats["killstreak"];
-                        
-                        updateText += `<li class="stalkerAttack">Won ${attacksWon} attack${attacksWon == 1 ? "" : "s"}, gained ${respectGained} respect, increased Elo by ${eloGained} to ${newElo.toLocaleString()} and has a new kill streak of ${newKillStreak.toLocaleString()}</li>`;
-                    }
-                    else if(statName == "attackslost")
-                    {
-                        let attacksLost = targetUpdate.personalstats["attackslost"] - this.target.personalstats["attackslost"];
-                        let eloLost = this.target.personalstats["elo"] - targetUpdate.personalstats["elo"];
-                        let newElo = targetUpdate.personalstats["elo"];
-                        let oldKillStreak = this.target.personalstats["killstreak"];
-                        
-                        updateText += `<li class="stalkerAttack">Lost ${attacksWon} attack${attacksWon == 1 ? "" : "s"}, decreased Elo by ${eloLost} to ${newElo.toLocaleString()} and has reset a kill streak of ${oldKillStreak.toLocaleString()}</li>`;
-                    }
-                    else if(statName == "medicalitemsused")
-                    {
-                        let medicalItemsUsed = targetUpdate.personalstats["medicalitemsused"] - this.target.personalstats["medicalitemsused"];
-                        
-                        updateText += `<li class="stalkerItem">Used ${medicalItemsUsed} medical item${medicalItemsUsed == 1 ? "" : "s"}</li>`;
-                    }
-                    else if(statName == "refills")
-                    {
-                        let energyRefills  = targetUpdate.personalstats["refills"] - this.target.personalstats["refills"];
-                        
-                        updateText += `<li class="stalkerPoints">Used ${energyRefills == 1 ? "an" : energyRefills} Energy Refill${energyRefills == 1 ? "" : "s"}</li>`;
-                    }
-                    else if(statName == "nerverefills")
-                    {
-                        let nerveRefills  = targetUpdate.personalstats["nerverefills"] - this.target.personalstats["nerverefills"];
-                        
-                        updateText += `<li class="stalkerPoints">Used ${nerveRefills == 1 ? "a" : nerveRefills} Nerve Refill${nerveRefills == 1 ? "" : "s"}</li>`;
-                    }
-                    else if(statName == "tokenrefills")
-                    {
-                        let tokenRefills  = targetUpdate.personalstats["tokenrefills"] - this.target.personalstats["tokenrefills"];
-                        
-                        updateText += `<li class="stalkerPoints">Used ${tokenRefills == 1 ? "a" : tokenRefills} Token Refill${tokenRefills == 1 ? "" : "s"}</li>`;
-                    }
+                    updateText += this.handleEnergyEvents(statName, targetUpdate);
+                    updateText += this.handleCrimeEvents(statName, targetUpdate);
+                    updateText += this.handleDrugEvents(statName, targetUpdate);
+                    updateText += this.handleItemEvents(statName, targetUpdate);
+                    updateText += this.handlePointEvents(statName, targetUpdate);
+                    updateText += this.handleMessageEvents(statName, targetUpdate);
+                    updateText += this.handleMoneyEvents(statName, targetUpdate);
+                }
+            }
+            
+            for(let [statName, oldStatValue] of Object.entries(this.target.status))
+            {
+                if(targetUpdate.status[statName] != oldStatValue)
+                {
+                    updateText += this.handleStatusEvents(statName, targetUpdate);
+                }
+            }
+            
+            for(let [statName, oldStatValue] of Object.entries(this.target))
+            {
+                if(targetUpdate[statName] != oldStatValue)
+                {
+                    updateText += this.handleMessageEvents(statName, targetUpdate);
                 }
             }
 
@@ -3416,6 +3524,7 @@ class StalkerModule extends BaseModule
                     <ul class="stalkerText">${updateText}</ul>
                 `;
                 
+                this.target.stalkerEvents.push({timestamp: now, outerHTML: div.outerHTML});
                 document.querySelector(".stalkerHistory").prepend(div);
             }
             
@@ -3424,10 +3533,417 @@ class StalkerModule extends BaseModule
                 e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp)) + " ago";
             });
             
+            targetUpdate.stalkerEvents = this.target.stalkerEvents.slice(-100);
             this.target = targetUpdate;
+            
+            this.targets = JSON.parse(localStorage.getItem("AquaTools_Stalker_targets") || "{}");
+            
+            this.targets[this.targetId] = this.target;
+            
+            localStorage.setItem("AquaTools_Stalker_targets", JSON.stringify(this.targets));
+            
+            break;
         }
         
         setTimeout(this.stalk.bind(this), 1000);
+    }
+    
+    handleActionEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        if(statName == "status")
+        {
+            let newStatus = newTarget.last_action.status;
+            let oldStatus = this.target.last_action.status;
+            
+            if(newStatus == "Offline")
+            {
+                updateText += `<li class="stalkerMiscRed">Has gone offline</li>`;
+            }
+            else if(newStatus == "Online" && oldStatus == "Offline")
+            {
+                updateText += `<li class="stalkerMiscGreen">Has come online</li>`;
+            }
+        }
+        
+        return updateText;
+    }
+    
+    handleEnergyEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        if(statName == "attackswon")
+        {
+            let attacksWon = newTarget.personalstats["attackswon"] - this.target.personalstats["attackswon"];
+            
+            updateText += `<li class="stalkerAttackGreen">Won ${attacksWon} attack${attacksWon == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "attackslost")
+        {
+            let attacksLost = newTarget.personalstats["attackslost"] - this.target.personalstats["attackslost"];
+
+            updateText += `<li class="stalkerAttackRed">Lost ${attacksLost} attack${attacksLost == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "defendswon")
+        {
+            let defendsWon = newTarget.personalstats["defendswon"] - this.target.personalstats["defendswon"];
+            
+            updateText += `<li class="stalkerAttackGreen">Was attacked ${defendsWon} time${defendsWon == 1 ? "" : "s"} and won</li>`;
+        }
+        else if(statName == "defendslost")
+        {
+            let defendsLost = newTarget.personalstats["defendslost"] - this.target.personalstats["defendslost"];
+            
+            updateText += `<li class="stalkerAttackRed">Was attacked ${defendsLost} time${defendsLost == 1 ? "" : "s"} and lost</li>`;
+        }
+        else if(statName == "elo")
+        {
+            let eloDifference = newTarget.personalstats["elo"] - this.target.personalstats["elo"];
+            let className;
+            let word;
+            
+            if(eloDifference > 0)
+            {
+                className = "stalkerAttackGreen";
+                word = "Gained";
+            }
+            else
+            {
+                className = "stalkerAttackRed";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${Math.abs(eloDifference)} elo rating and now has ${newTarget.personalstats["elo"].toLocaleString()}</li>`;
+        }
+        else if(statName == "peoplebusted")
+        {
+            let peopleBusted = newTarget.personalstats["peoplebusted"] - this.target.personalstats["peoplebusted"];
+            
+            updateText += `<li class="stalkerJailGreen">Busted ${peopleBusted} ${peopleBusted == 1 ? "person" : "people"} out of jail</li>`;
+        }
+        else if(statName == "revives")
+        {
+            let revives = newTarget.personalstats["revives"] - this.target.personalstats["revives"];
+            
+            updateText += `<li class="stalkerHospitalGreen">Revived ${revives} ${revives == 1 ? "person" : "people"}</li>`;
+        }
+        else if(statName == "dumpsearches")
+        {
+            let dumpSearches = newTarget.personalstats["dumpsearches"] - this.target.personalstats["dumpsearches"];
+            let dumpFinds = newTarget.personalstats["dumpfinds"] - this.target.personalstats["dumpfinds"];
+            
+            updateText += `<li class="stalkerMisc">Searched the dump ${dumpSearches} time${dumpSearches == 1 ? "" : "s"} and found ${dumpFinds} item${dumpFinds == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "contractscompleted")
+        {
+            let contractsDone = newTarget.personalstats["contractscompleted"] - this.target.personalstats["contractscompleted"];
+            let creditsGained = newTarget.personalstats["missioncreditsearned"] - this.target.personalstats["missioncreditsearned"];
+            
+            updateText += `<li class="stalkerContractGreen">Completed ${contractsDone} contract${contractsDone == 1 ? "" : "s"} and earned a total of ${creditsGained.toLocaleString()} mission credits</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleCrimeEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        let crimeNames = 
+        {
+            "selling_illegal_products": "Sell Copied Media",
+            "theft": "Theft",
+            "auto_theft": "Grand Theft Auto",
+            "drug_deals": "Drugs",
+            "computer_crimes": "Computer",
+            "murder": "Murder",
+            "fraud_crimes": "Fraud"
+        };
+        
+        if(Object.keys(crimeNames).some(e => e == statName))
+        {
+            let crimeAmount = newTarget.criminalrecord[statName] - this.target.criminalrecord[statName];
+            
+            updateText += `<li class="stalkerCrimeGreen">Committed ${crimeAmount} crime${crimeAmount == 1 ? "" : "s"} of type: ${crimeNames[statName]}</li>`;
+        }
+        else if(statName == "organisedcrimes")
+        {
+            let amount = newTarget.criminalrecord[organisedcrimes] - this.target.criminalrecord[organisedcrimes];
+            
+            updateText += `<li class="stalkerCrimeGreen">Was part of ${amount} successful OC${amount == 1 ? "" : "s"}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleDrugEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        let drugNames = 
+        {
+            "cantaken": "Cannabis",
+            "exttaken": "Ecstasy",
+            "kettaken": "Ketamine",
+            "lsdtaken": "LSD",
+            "opitaken": "Opium",
+            "shrtaken": "Shrooms",
+            "spetaken": "Speed",
+            "pcptaken": "PCP",
+            "xantaken": "Xanax",
+            "victaken": "Vicodin",
+        };
+        
+        if(Object.keys(drugNames).some(e => e == statName))
+        {
+            let amountTaken = newTarget.personalstats[statName] - this.target.personalstats[statName];
+            let didOD = (newTarget.personalstats["overdosed"] - this.target.personalstats["overdosed"]) > 0;
+            
+            if(didOD && amountTaken == 1)
+            {
+                updateText += `<li class="stalkerDrugRed">Overdosed on ${drugNames[statName]}</li>`;
+            }
+            else
+            {
+                updateText += `<li class="stalkerDrugGreen">Took ${amountTaken} ${drugNames[statName]}</li>`;
+            }
+        }
+        
+        return updateText;
+    }
+    
+    handleItemEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        if(statName == "medicalitemsused")
+        {
+            let medicalItemsUsed = newTarget.personalstats["medicalitemsused"] - this.target.personalstats["medicalitemsused"];
+            
+            updateText += `<li class="stalkerItemGreen">Used ${medicalItemsUsed} medical item${medicalItemsUsed == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "candyused")
+        {
+            let candyUsed = newTarget.personalstats["candyused"] - this.target.personalstats["candyused"];
+            
+            updateText += `<li class="stalkerItemGreen">Ate ${candyUsed} ${candyUsed == 1 ? "candy" : "candies"}</li>`;
+        }
+        else if(statName == "alcoholused")
+        {
+            let alcoholUsed = newTarget.personalstats["alcoholused"] - this.target.personalstats["alcoholused"];
+            
+            updateText += `<li class="stalkerItemGreen">Drank ${alcoholUsed} alcoholic beverage${alcoholUsed == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "energydrinkused")
+        {
+            let energydrinkUsed = newTarget.personalstats["energydrinkused"] - this.target.personalstats["energydrinkused"];
+            
+            updateText += `<li class="stalkerItemGreen">Drank ${energydrinkUsed} energy drink${energydrinkUsed == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "statenhancersused")
+        {
+            let statenhancersUsed = newTarget.personalstats["statenhancersused"] - this.target.personalstats["statenhancersused"];
+            
+            updateText += `<li class="stalkerItemGreen">Used ${statenhancersUsed} stat enhancer${statenhancersUsed == 1 ? "" : "s"}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleMoneyEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        if(statName == "rehabcost")
+        {
+            let cost = newTarget.personalstats["rehabcost"] - this.target.personalstats["rehabcost"];
+            
+            updateText += `<li class="stalkerMoneyRed">Spent $${cost.toLocaleString()} on rehab</li>`;
+        }
+        else if(statName == "peoplebought")
+        {
+            let peopleBought = newTarget.personalstats["peoplebought"] - this.target.personalstats["peoplebought"];
+            let sum = newTarget.personalstats["peopleboughtspent"] - this.target.personalstats["peopleboughtspent"];
+            
+            updateText += `<li class="stalkerMoneyRed">Bought ${peopleBought} ${peopleBought == 1 ? "person" : "people"} out of jail for a total of $${sum.toLocaleString()}</li>`;
+        }
+        else if(statName == "moneymugged")
+        {
+            let mugged = newTarget.personalstats["moneymugged"] - this.target.personalstats["moneymugged"];
+            
+            updateText += `<li class="stalkerMoneyGreen">Mugged $${mugged.toLocaleString()}</li>`;
+        }
+        else if(statName == "pointsbought")
+        {
+            let bought = newTarget.personalstats["pointsbought"] - this.target.personalstats["pointsbought"];
+            
+            updateText += `<li class="stalkerMoneyRed">Bought ${bought.toLocaleString()} point${bought == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "bountiesplaced")
+        {
+            let bountiesPlaced = newTarget.personalstats["bountiesplaced"] - this.target.personalstats["bountiesplaced"];
+            let sum = newTarget.personalstats["totalbountyspent"] - this.target.personalstats["totalbountyspent"];
+            
+            updateText += `<li class="stalkerMoneyRed">Spent $${sum.toLocaleString()} on ${bountiesPlaced} ${bountiesPlaced == 1 ? "bounty" : "bounties"}</li>`;
+        }
+        else if(statName == "bountiescollected")
+        {
+            let bounties = newTarget.personalstats["bountiescollected"] - this.target.personalstats["bountiescollected"];
+            let sum = newTarget.personalstats["totalbountyreward"] - this.target.personalstats["totalbountyreward"];
+            
+            updateText += `<li class="stalkerMoneyGreen">Claimed ${bounties} ${bounties == 1 ? "bounty" : "bounties"} and made a total of $${sum.toLocaleString()}`;
+        }
+        
+        return updateText;
+    }
+    
+    handlePointEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        if(statName == "refills")
+        {
+            let energyRefills  = newTarget.personalstats["refills"] - this.target.personalstats["refills"];
+            
+            updateText += `<li class="stalkerPointsGreen">Used ${energyRefills} Energy Refill${energyRefills == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "nerverefills")
+        {
+            let nerveRefills  = newTarget.personalstats["nerverefills"] - this.target.personalstats["nerverefills"];
+            
+            updateText += `<li class="stalkerPointsGreen">Used ${nerveRefills} Nerve Refill${nerveRefills == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "tokenrefills")
+        {
+            let tokenRefills  = newTarget.personalstats["tokenrefills"] - this.target.personalstats["tokenrefills"];
+            
+            updateText += `<li class="stalkerPointsGreen">Used ${tokenRefills} Token Refill${tokenRefills == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "jobpointsused")
+        {
+            let jobpointsUsed = newTarget.personalstats["jobpointsused"] - this.target.personalstats["jobpointsused"];
+            
+            updateText += `<li class="stalkerCompanyGreen">Used ${jobpointsUsed} job point${jobpointsUsed == 1 ? "" : "s"}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleMessageEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        let mailReceivers = 
+        {
+            "friendmailssent": "a friend",
+            "factionmailssent": "their faction",
+            "companymailssent": "their company",
+            "spousemailssent": "their spouse",
+            "mailssent": "a stranger"
+        };
+        
+        if(Object.keys(mailReceivers).some(e => e == statName))
+        {
+            let amountSent = newTarget.personalstats[statName] - this.target.personalstats[statName];
+            
+            if(statName == "mailssent")
+            {
+                amountSent -= newTarget.personalstats["friendmailssent"] - this.target.personalstats["friendmailssent"];
+                amountSent -= newTarget.personalstats["factionmailssent"] - this.target.personalstats["factionmailssent"];
+                amountSent -= newTarget.personalstats["companymailssent"] - this.target.personalstats["companymailssent"];
+                amountSent -= newTarget.personalstats["spousemailssent"] - this.target.personalstats["spousemailssent"];
+            }
+            
+            if(amountSent > 0)
+            {
+                updateText += `<li class="stalkerMessage">Sent ${amountSent} mail${amountSent == 1 ? "" : "s"} to ${mailReceivers[statName]}</li>`;
+            }
+        }
+        else if(statName == "forum_posts")
+        {
+            let amount = newTarget.forum_posts - this.target.forum_posts;
+            
+            updateText += `<li class="stalkerMessage">Made ${Math.abs(amount)} post${Math.abs(amount) == 1 ? "" : "s"} on the forum</li>`;
+        }
+        else if(statName == "karma")
+        {
+            let amount = newTarget.karma - this.target.karma;
+            
+            let className;
+            let word;
+            
+            if(amount > 0)
+            {
+                className = "stalkerMessageGreen";
+                word = "Gained";
+            }
+            else
+            {
+                className = "stalkerMessageRed";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${amount} forum karma</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleStatusEvents(statName, newTarget)
+    {
+        let updateText = "";
+        
+        if(statName == "state")
+        {
+            let oldStatus = this.target.status;
+            let newStatus = newTarget.status;
+            
+            if(newStatus.state == "Jail")
+            {
+                updateText += `<li class="stalkerJailRed">Was sent to jail, (${newStatus.details}) expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
+            }
+            else if(newStatus.state == "Hospital")
+            {
+                updateText += `<li class="stalkerHospitalRed">Was sent to hospital (${newStatus.details}), expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
+            }
+            else if(newStatus.state == "Okay")
+            {
+                if(oldStatus.state == "Jail")
+                {
+                    updateText += `<li class="stalkerJailGreen">Was released from jail</li>`;
+                }
+                else if(oldStatus.state == "Hospital")
+                {
+                    updateText += `<li class="stalkerHospitalGreen">Was released from hospital</li>`;
+                }
+            }
+            else if(newStatus.state == "Traveling")
+            {
+                if(oldStatus.state == "Abroad")
+                {
+                    updateText += `<li class="stalkerFlying">Started flying from ${oldStatus.description.split("In ")[1]} to Torn City</li>`;
+                }
+                else
+                {
+                    updateText += `<li class="stalkerFlying">Started flying from Torn City to ${newStatus.description.split("Traveling to ")[1]}</li>`;
+                }
+            }
+            else if(oldStatus.state == "Traveling")
+            {
+                if(newStatus.state == "Abroad")
+                {
+                    updateText += `<li class="stalkerFlying">Landed in ${oldStatus.description.split("Traveling to ")[1]}</li>`;
+                }
+                else
+                {
+                    updateText += `<li class="stalkerFlying">Landed in Torn City</li>`;
+                }
+            }
+        }
+        
+        return updateText;
     }
 }
 
@@ -4370,4 +4886,4 @@ class SettingsModule extends BaseModule
 
 let settings = new SettingsModule();
 
-//let stalker = new StalkerModule();
+//let stalker = new ActivityStalkerModule();
