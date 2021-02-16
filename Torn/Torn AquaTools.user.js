@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.48
+// @version      1.49
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -75,7 +75,7 @@ class Utils
         return Array.from(s).reverse().join("");
     }
     
-    static formatTime(seconds)
+    static formatTime(seconds, alternateFormat = false)
     {
         seconds = Math.max(0, seconds);
         
@@ -85,7 +85,14 @@ class Utils
         var minutes = parseInt(seconds/60);
         seconds -= minutes*60;
 
-        return "[" + (hours < 10 ? "0" : "") + hours + ":" + (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds + "]";
+        if(alternateFormat)
+        {
+            return (hours < 10 ? "0" : "") + hours + "h " + (minutes < 10 ? "0" : "") + minutes + "m " + (seconds < 10 ? "0" : "") + seconds + "s";
+        }
+        else
+        {
+            return "[" + (hours < 10 ? "0" : "") + hours + ":" + (minutes < 10 ? "0" : "") + minutes + ":" + (seconds < 10 ? "0" : "") + seconds + "]";
+        }
     }
     
     static getMonthName(month)
@@ -369,6 +376,1264 @@ class BaseModule
 Object.defineProperty(BaseModule, "_ajaxModule", {value: new AjaxModule()})
 Object.defineProperty(BaseModule, "_apiModule", {value: new ApiModule()})
 
+class ActivityStalkerModule extends BaseModule
+{
+    constructor()
+    {
+        super("&page=ActivityStalker");
+        
+        if(document.location.href.includes("/profiles.php?XID") && !document.location.href.includes("&page=ActivityStalker"))
+        {
+            this.addAjaxListener("getProfileData", false, (json) => 
+            {
+                let newButton = 
+                {
+                    actionDescription: "Stalk", 
+                    link: document.location.href + "&page=ActivityStalker", 
+                    message: `Start stalking ${json.user.playerName}`,
+                    state: "active"
+                };
+
+                let newButtonsObject = {};
+                
+                for(let [name, button] of Object.entries(json.profileButtons.buttons))
+                {
+                    newButtonsObject[name] = button;
+                    
+                    if(name == "personalStats")
+                    {
+                        newButtonsObject.stalk = newButton;
+                    }
+                }
+                
+                json.profileButtons.buttons = newButtonsObject;
+
+                return json;
+            });
+            
+            this.modifyProfileButton();
+        }
+        
+        this.ready();
+    }
+    
+    async init()
+    {
+        this.replaceContent("content-wrapper", async element =>
+        {
+            this.contentElement = element;
+            this.contentElement.classList.add("stalkerContainer");
+            
+            this.targetIDs = document.location.href.split("XID=")[1].split("&")[0].split(",");
+            this.targets = [];
+            this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
+            
+            for(let i = 0; i < this.targetIDs.length; i++)
+            {
+                if(this.targetsObject.hasOwnProperty(this.targetIDs[i]))
+                {
+                    this.targets.push(this.targetsObject[this.targetIDs[i]]);
+                }
+                else
+                {
+                    let target = await this.api(`/user/${this.targetIDs[i]}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                    this.targetsObject[this.targetIDs[i]] = target;
+                    this.targets.push(target);
+                }
+                
+                if(!this.targets[i].hasOwnProperty("stalkerEvents"))
+                {
+                    this.targets[i].stalkerEvents = [];
+                }
+            }
+            
+            localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
+            
+            this.loadImageUrls();
+            this.addStyle();
+            this.addHeader();
+            this.addBody();
+            this.addStalkerEvents();
+            
+            document.title = "Stalking - " + this.targets.map(e => e.name).join(", ") + " | TORN";
+            
+            for(let i = 0; i < this.targets.length; i++)
+            {
+                this.stalk(i);
+            }
+        });
+    }
+    
+    async modifyProfileButton()
+    {
+        let button;
+        
+        while(!(button = document.querySelector(".profile-button-stalk")))
+        {
+            await Utils.sleep(100);
+        }
+        
+        let buttonSVG = `<svg viewBox="-2 -2 36 36" xmlns="http://www.w3.org/2000/svg"><defs><style>.cls-1{fill:#101820;}</style></defs><title/><g data-name="Layer 3" id="Layer_3"><path class="cls-1" d="M11,22A10,10,0,1,1,21,12,10,10,0,0,1,11,22ZM11,4a8,8,0,1,0,8,8A8,8,0,0,0,11,4Z"/><path class="cls-1" d="M28,29.74a3,3,0,0,1-1.93-.7L19.94,23.9a3,3,0,0,1,3.86-4.6l6.13,5.14A3,3,0,0,1,28,29.74ZM21.87,20.6h-.09a1,1,0,0,0-.55,1.77l6.13,5.14a1,1,0,0,0,1.41-.12,1,1,0,0,0,.23-.73,1,1,0,0,0-.36-.68l-6.13-5.15A1,1,0,0,0,21.87,20.6Z"/><path class="cls-1" d="M20,21a1,1,0,0,1-.64-.23L17,18.82a1,1,0,0,1,1.28-1.54l2.34,1.95a1,1,0,0,1,.13,1.41A1,1,0,0,1,20,21Z"/></g></svg>`;
+        
+        button.innerHTML = buttonSVG;
+    }
+    
+    addStyle()
+    {
+        let style = `
+        .stalkerHistory *
+        {
+            all: revert;
+            color: #999;
+        }
+        
+        .stalkerContainer a, .stalkerContainer a:link, .stalkerContainer a:visited
+        {
+            all: revert;
+            
+            text-decoration: none !important;
+            color: #999 !important;
+        }
+        
+        .stalkerContainer h4 a, .stalkerContainer h4 a:link, .stalkerContainer h4 a:visited
+        {
+            color: var(--default-color) !important;
+        }
+        
+        .stalkerRow
+        {
+            margin-bottom: 10px;
+            padding: 4px;
+            border: 1px solid #999;
+            background-color: #222;
+        }
+        
+        .stalkerTimeContainer
+        {
+            font-weight: 600;
+            text-align: center;
+            margin: 3px 0;
+            position: relative;
+        }
+        
+        .stalkerTimeContainer > .stalkerLink
+        {
+            display: inline-block;
+            position: absolute;
+            left: 1px;
+        }
+        
+        ul.stalkerText
+        {
+            padding-left: 10px;
+            margin: 8px 0 0;
+        }
+        
+        ul.stalkerText li
+        {
+            list-style-type: none;
+            margin-bottom: 5px;
+            padding-left: 22px;
+            line-height: 20px;
+        }
+        
+        `;
+        
+        for(let [name, image] of Object.entries(this.images))
+        {
+            style += `
+                .stalker${name[0].toUpperCase() + name.slice(1)}
+                {
+                    background: url("data:image/svg+xml;base64,${window.btoa(image)}") no-repeat left center;
+                }
+            `;
+        }
+        
+        GM_addStyle(style);
+    }
+    
+    addHeader()
+    {
+        this.contentElement.innerHTML = `
+        <div class="content-title m-bottom10">
+            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Activity Stalker - <span style="font-size: 16px">${this.targets.map(e => "<a href='/profiles.php?XID=" + e.player_id + "'>" + e.name + "</a>").join(", ")}</span></h4>
+        <div class="clear"></div>
+        <hr class="page-head-delimiter">
+        </div>
+        `;
+    }
+    
+    addBody()
+    {
+        let html = `
+            <div class="stalkerHistory">
+
+            </div>`;
+
+        this.contentElement.innerHTML += html;
+    }
+    
+    addStalkerEvents()
+    {
+        let history = document.querySelector(".stalkerHistory");
+        
+        for(let event of this.targets.map(e => e.stalkerEvents).flat().sort((a, b) => b.timestamp - a.timestamp))
+        {
+            history.innerHTML += event.outerHTML;
+        }
+        
+        document.querySelectorAll(".stalkerTime").forEach(e => 
+        {
+            e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp), true) + " ago";
+        });
+    }
+    
+    loadImageUrls()
+    {
+        let greenColor = "#d8f5a2";
+        let redColor = "#ffa8a8";
+        let originalColor = "#ffffff"
+        
+        this.images = 
+        {
+            attack: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18.01" height="12.7" viewBox="0 0 18.01 12.7"><path data-name="Path 282-2" d="M6.63,4.6v.56a.78.78,0,0,0,.77.77L9.28,6a.79.79,0,0,0,.77-.77A1.23,1.23,0,0,0,10,4.6a.21.21,0,0,0-.07.14h0a.08.08,0,0,1,.07.07h0c0,.07,0,.07-.07.07a1.46,1.46,0,0,1-.7,1,.07.07,0,0,1-.07-.07H9.07c-.14,0-.07-.21-.07-.21l.27-.84A2.61,2.61,0,0,0,9,4L7.4,3.83a.78.78,0,0,0-.77.77ZM.22.42.5.07H.64l.2.35H15.2L15.34,0h.28l.14.42h.49a.31.31,0,0,1,.28.21V2.09l-.07.07v.49a.31.31,0,0,1,.14.28c0,.21-.14.21-.14.21a2.62,2.62,0,0,0-.63.14c-.63.21-.7.83-.56,1.74a5,5,0,0,0,.63,1.67c-.07,0-.07,0-.07.07s.07.07.14.07L16,6.9C16,6.9,16,6.9,16,7S16,7,16.11,7l.07.07c-.07,0-.07,0-.07.07s.07.07.14.07l.07.07c-.07,0-.07,0-.07.07a.21.21,0,0,0,.13.07l.07.07c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.14c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.07-.07.07.07.07.07.14a.08.08,0,0,0-.07.07h0l.07.07.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0l.07.07a.27.27,0,0,0,.07.13h0v.07c0,.07.07.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07v.42a1.29,1.29,0,0,1-.07.7c-.14.28-.7.49-.7.49h-.56V12a1.05,1.05,0,0,1,.28.49c0,.27-.41.2-.41.2H13.74c-.63,0-.56-.41-.56-.41l-.07-.42a2.5,2.5,0,0,1-.35-.21.78.78,0,0,1-.14-.42v-.49a3.38,3.38,0,0,0-.28-.83.8.8,0,0,0-.41-.42c-.14-.07-.07-.14-.07-.14a.81.81,0,0,0,0-.77c-.14-.28-.21-.48-.42-.55s-.14-.21-.14-.21.21-.28-.07-1c-.21-.42-.42-.56-.7-.56a1.68,1.68,0,0,0-.7.21A3.41,3.41,0,0,1,9,6.56L6.28,6.42l-.07-.14.07-.14a2.28,2.28,0,0,0,.13-1,3.46,3.46,0,0,0-.07-.91,1.91,1.91,0,0,0-.55-.42s-4.53-.13-5-.2S.28,3.29.28,3.29.21,2.8.21,2.66V2.38H.14V2h0L.07,1.89A1.61,1.61,0,0,1,0,1.4.9.9,0,0,1,.14.92V.78C.14.71.21.78.21.64A.13.13,0,0,1,.34.5h0L.21.43Z"></path></svg>`, 
+            item: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path d="M10.59,6.67A4,4,0,0,1,10.45,1l.07-.07L9.59,0h3.74V3.74l-.93-.93S9.57,3.93,10.59,6.67ZM8.65,1l-1-1L2.85,2.82l1.33.78ZM16,5.36v7.22L10,16V8.58ZM8.65,7.78l-6.73-4L0,6.43l6.74,4Zm-7.32,1v2.86l7.34,4.18V10L7.11,12.19Z"></path></svg>`, 
+            bazaar: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16.2" viewBox="0 0 16 16.2"><path data-name="Path 222-2" d="M3.33,4.13A1.33,1.33,0,0,0,4.67,5.4,1.28,1.28,0,0,0,6,4.17V3.4L6.6.07H5.33l-2,3.33Zm-.66,0V3.4L4.6.07H3.27L0,3.4v.73A1.32,1.32,0,0,0,1.33,5.4,1.29,1.29,0,0,0,2.67,4.17v0ZM12.73,0H11.4l1.93,3.27V4a1.34,1.34,0,0,0,1.34,1.33A1.28,1.28,0,0,0,16,4.1V3.33ZM8,5.4A1.33,1.33,0,0,0,9.33,4.07V3.33L8.6.07H7.33L6.67,3.33v.74A1.33,1.33,0,0,0,8,5.4Zm2-1.33A1.34,1.34,0,0,0,11.33,5.4a1.29,1.29,0,0,0,1.34-1.23V3.4l-2-3.33H9.4L10,3.33ZM.67,16.2H15.33V6.87H.67ZM2,8.2H14v4.67H2Z"></path></svg>`, 
+            points: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Path 295-2" d="M2.14,9A6.86,6.86,0,1,1,9,15.86,6.86,6.86,0,0,1,2.14,9ZM0,9A9,9,0,1,0,9,0,9,9,0,0,0,0,9ZM10,9H8V7h2ZM6,5v8H8V11h2a2,2,0,0,0,2-2V7a2,2,0,0,0-2-2Z"></path></svg>`, 
+            crime: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path d="M7.1,14.81a17.77,17.77,0,0,1-3.87,1.82.68.68,0,0,1-.54-.05.62.62,0,0,1-.32-.6.64.64,0,0,1,.43-.54C6.27,14.3,9.24,12.14,10.59,9a2.05,2.05,0,0,0-1-2.72,1.94,1.94,0,0,0-1-.17A2.31,2.31,0,0,0,6.33,7.59c-.8,1.85-2.82,3.32-5.52,4.08A.65.65,0,0,1,0,11.23a.77.77,0,0,1,0-.15.63.63,0,0,1,.48-.63c2.31-.65,4-1.85,4.65-3.35A3.72,3.72,0,0,1,10,5.18,3.65,3.65,0,0,1,11.56,6.4a3.13,3.13,0,0,1,.23,3.1,11,11,0,0,1-1.95,3A12.88,12.88,0,0,1,7.1,14.8ZM1,14.36c3.47-.82,6.78-2.72,8.16-5.92a.62.62,0,0,0-.33-.82h0A.65.65,0,0,0,8,8C7,10.41,4.27,12.3.75,13.13a.63.63,0,0,0-.5.74.63.63,0,0,0,.74.5Zm15.57.92a.6.6,0,0,0,.2-.56.61.61,0,0,0-.38-.47,3.5,3.5,0,0,1-1.72-1.18,3.86,3.86,0,0,1-.09-2.76c.28-1.54.63-3.46-.76-5.4A6.22,6.22,0,0,0,9.42,2.42,6.79,6.79,0,0,0,4.19,4.1,6.74,6.74,0,0,0,2.91,5.78a3.65,3.65,0,0,1-2.32,2A.63.63,0,0,0,.71,9,.65.65,0,0,0,1,9,4.79,4.79,0,0,0,4,6.42,5.53,5.53,0,0,1,5.07,5a5.39,5.39,0,0,1,4.2-1.35,4.92,4.92,0,0,1,3.52,1.95c1.08,1.51.81,3,.55,4.46a4.86,4.86,0,0,0,.26,3.65,4.59,4.59,0,0,0,2.27,1.65.72.72,0,0,0,.73-.11Zm-8.8.91c-.3.17-.67.38-1.15.61a.64.64,0,0,0-.35.67.66.66,0,0,0,.76.52l.17,0c.31-.16.58-.3.82-.44.93-.51,1-.52,1.9.11l.35.25a.67.67,0,0,0,.48.1.65.65,0,0,0,.52-.49.62.62,0,0,0-.27-.65c-.37-.26-.65-.47-.86-.63-.87-.68-1.16-.7-2.38,0ZM1.16,4.91A.57.57,0,0,0,2,4.77H2l.39-.56A7.56,7.56,0,0,1,9.67,1.34c2.89.37,5.26,2,6,4.1a8.17,8.17,0,0,1,.2,4.62c-.19,1-.35,2,.22,2.69a2.34,2.34,0,0,0,1,.7.64.64,0,0,0,.81-.36.54.54,0,0,0,0-.22.67.67,0,0,0-.43-.62,1,1,0,0,1-.41-.27c-.23-.29-.12-.92,0-1.71A9.33,9.33,0,0,0,16.93,5C16,2.45,13.2.52,9.84.09A10.39,10.39,0,0,0,8.47,0,8.79,8.79,0,0,0,1.92,2.7,4.82,4.82,0,0,0,1,4.08a.6.6,0,0,0,.17.83h0Zm10.63,8.81a.66.66,0,0,0-.88-.23.62.62,0,0,0-.26.84v0a7,7,0,0,0,2.77,2.56.69.69,0,0,0,.61,0h0a.63.63,0,0,0,.3-.83.57.57,0,0,0-.27-.28,5.77,5.77,0,0,1-2.28-2.1Z"></path></svg>`, 
+            hospital: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path data-name="Path 1-2" d="M6,0V6H0v4H6v6h4V10h6V6H10V0Z"></path></svg>`, 
+            flying: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.99" height="14.93" viewBox="0 0 15.99 14.93"><path data-name="Path 5-2" d="M15.2.05a1.29,1.29,0,0,0-1,.35L11.09,3.05a1.3,1.3,0,0,1-1.16.2L9.18,3a.52.52,0,0,1-.34-.65.51.51,0,0,1,.09-.16l.53-.78a.22.22,0,0,0,0-.32h0a.89.89,0,0,0-.8-.15,1.34,1.34,0,0,0-.4.27l-.54.59a1.37,1.37,0,0,1-1.14.38L5.28,1.89c-.37-.07-.51-.35-.31-.62L5.34.78A.6.6,0,0,0,5.48.36C5.45.11,5-.06,4.7,0a2.45,2.45,0,0,0-1,.71L3.64.86a1.67,1.67,0,0,1-1.14.49l-1.07,0c-.38,0-.85-.16-1.08-.14A.37.37,0,0,0,0,1.41a.7.7,0,0,0,0,.38c.06.21.52.43.85.61,1.47.8,4.62,2.46,5.94,3.15a.44.44,0,0,1,.25.57.39.39,0,0,1-.16.2L3.13,9.67A1.48,1.48,0,0,1,2,10l-.39-.1a2.27,2.27,0,0,0-1-.1,1.29,1.29,0,0,0-.58.68c-.07.33.46.72.81.86A3.44,3.44,0,0,1,2.06,12a4,4,0,0,1,.8,1.37c.13.35.35.88.62.84A.84.84,0,0,0,3.91,14l.21-.24a1.17,1.17,0,0,0,.06-.9l-.06-.24a1.17,1.17,0,0,1,.37-1.1L8.8,7.93a.48.48,0,0,1,.69,0,.42.42,0,0,1,.11.18l2.72,6.23c.15.34.69.81.81.45a2.69,2.69,0,0,0,0-1.13l-.07-.61a1.37,1.37,0,0,1,.47-1l.88-.7a1.14,1.14,0,0,0,.36-.53c.1-.34-.18-.8-.4-.77a5.81,5.81,0,0,0-.92.4c-.3.14-.57-.05-.6-.42l0-.69a1.26,1.26,0,0,1,.53-1.05l.23-.14a2.34,2.34,0,0,0,.91-1h0A.72.72,0,0,0,14,6.33a4.88,4.88,0,0,0-1.13.26.56.56,0,0,1-.7-.38.59.59,0,0,1,0-.13l0-.35a1.53,1.53,0,0,1,.43-1.14l2.73-2.5A2.35,2.35,0,0,0,16,1a.66.66,0,0,0,0-.14A.88.88,0,0,0,15.2.05Z"></path></svg>`, 
+            misc: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14" height="13.96" viewBox="0 0 14 13.96"><path data-name="Union 21-2" d="M2.78,12.55h0A7.38,7.38,0,0,1,1.56,11.4L0,13V7.29c0-.1,0-.2,0-.3H6L4.15,8.81a3.39,3.39,0,0,0,2.59,1.55.73.73,0,0,0,.25,0,3.13,3.13,0,0,0,2-.63A3.53,3.53,0,0,0,10,8.6l2.57,2.59a7,7,0,0,1-9.78,1.36ZM14,7H8L9.85,5.15a3.34,3.34,0,0,0-2-1.46c0-1.82,0-3,0-3.64a7,7,0,0,1,4.58,2.52L14,1V6.67c0,.11,0,.2,0,.3ZM.06,6.11A7,7,0,0,1,2.57,1.57L1,0H7C7,1.11,7,3.86,7,6L5.15,4.15a3.39,3.39,0,0,0-1.45,2H.06Z"></path></svg>`, 
+            jail: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16.06" height="16" viewBox="0 0 16.06 16"><path data-name="Path 3-2" d="M10.88,0V16h1.88V0ZM6.18,11.82H9.94V9.94H6.18ZM0,11.82H2.41V9.94H0Zm13.71,0h2.35V9.94H13.71ZM6.18,6.18H9.94V4.29H6.18ZM0,6.18H2.41V4.29H0Zm13.71,0h2.35V4.29H13.71ZM3.35,0V16H5.24V0Z"></path></svg>`, 
+            drug: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="17" viewBox="0 0 16 17"><path data-name="Path 416-2" d="M16,9.6a9.4,9.4,0,0,0-5.1,1.8,16.8,16.8,0,0,0,3.3-8.3,16.68,16.68,0,0,0-5.3,8.4A18.3,18.3,0,0,0,8,0a17.91,17.91,0,0,0-.8,11.6A17.89,17.89,0,0,0,1.8,3.1a16.8,16.8,0,0,0,3.3,8.3A9.4,9.4,0,0,0,0,9.6a9.22,9.22,0,0,0,3.8,3.6,4.25,4.25,0,0,0-1.4,1.3s2.8,0,4-1.9c.2,0,.6,1.7.6,1.8v2.1a.47.47,0,0,0,.44.5H7.7a.47.47,0,0,0,.5-.44V14.4s.3-1.7.6-1.8c1.3,1.9,4.6,1.9,4.6,1.9A4.25,4.25,0,0,0,12,13.2,9,9,0,0,0,16,9.6Z"></path></svg>`, 
+            upgrade: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14.67" height="16" viewBox="0 0 14.67 16"><path d="M10.67,14.67V16H4V14.67Zm0-2.67H4v1.33h6.67ZM4,7.33v3.34h6.67V7.33h4L7.33,0,0,7.33Z"></path></svg>`, 
+            contract: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="14.66" viewBox="0 0 16 14.66"><path data-name="Path 37-2" d="M4,6.67a2.66,2.66,0,0,0,5.18.84l1.48-.86v0a4,4,0,1,1-2-3.47l-1.48.86A2.65,2.65,0,0,0,4.05,6.15a2.24,2.24,0,0,0,0,.52ZM6.67,5.34A1.33,1.33,0,1,0,8,6.67H8l2.24-1.3a3,3,0,0,1,2.47.11L16,3.56,13.9,2.51,14,.09,10.71,2A3,3,0,0,1,9.57,4.2L7.31,5.51a1.3,1.3,0,0,0-.64-.17Zm6.63,1.9A1.39,1.39,0,0,0,12,6.61v.06a5.36,5.36,0,1,1-2.64-4.6A1.83,1.83,0,0,0,9.46.62a6.66,6.66,0,0,0-7.24,11l-.87,2.7a.26.26,0,0,0,.17.33.25.25,0,0,0,.26-.06l2-1.92a6.64,6.64,0,0,0,5.77,0l2,1.92a.27.27,0,0,0,.37,0,.25.25,0,0,0,.06-.26l-.87-2.7a6.65,6.65,0,0,0,2.2-4.38Z"></path></svg>`, 
+            message: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.99" height="14.67" viewBox="0 0 15.99 14.67"><path data-name="Path 71-2" d="M13.07,13.74c-3.36.82-5.8-1.24-5.8-3.44s2.07-3.65,4.36-3.65S16,8.19,16,10.3a3.2,3.2,0,0,1-.74,2A5.82,5.82,0,0,0,16,14.67,10.68,10.68,0,0,1,13.07,13.74ZM5.93,10.3c0-2.75,2.56-5,5.7-5a6.45,6.45,0,0,1,1.7.23C13.32,2.32,10.16,0,6.67,0S0,2.35,0,5.57A4.86,4.86,0,0,0,1.14,8.7,8.73,8.73,0,0,1,0,12.24a16,16,0,0,0,4.43-1.41A10.19,10.19,0,0,0,6,11.07a4.9,4.9,0,0,1-.08-.77Z"></path></svg>`, 
+            money: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14.67" height="16" viewBox="0 0 14.67 16"><path d="M10.67,8a4,4,0,1,0,4,4A4,4,0,0,0,10.67,8ZM11,13.65V14h-.33v-.33a2.45,2.45,0,0,1-1-.24l.15-.55a2.08,2.08,0,0,0,1.07.18c.39-.09.47-.48,0-.67s-1.26-.27-1.26-1.08a1,1,0,0,1,1-1V10H11v.34a3.13,3.13,0,0,1,.81.14l-.12.55a2.05,2.05,0,0,0-.81-.16c-.5,0-.54.46-.19.64.57.27,1.31.47,1.31,1.18S11.55,13.57,11,13.65Zm1.08-6.79A4.46,4.46,0,0,0,14,6.07V6.5a1.14,1.14,0,0,1-.67.89A5.11,5.11,0,0,0,12.08,6.86ZM10.67,3C12.45,3,14,2.33,14,1.5S12.45,0,10.67,0,7.33.67,7.33,1.5,8.89,3,10.67,3Zm.06-1.34c-.2-.06-.81-.11-.81-.45,0-.19.22-.36.64-.4V.67h.21V.81a2.39,2.39,0,0,1,.53.06l-.08.23A1.91,1.91,0,0,0,10.75,1H10.7c-.32,0-.35.19-.13.27s.85.19.85.49-.29.36-.65.4v.15h-.21V2.19a2.3,2.3,0,0,1-.64-.09l.1-.23a2.61,2.61,0,0,0,.55.08h.14c.25,0,.3-.2,0-.28Zm-7.4,8.67A5.67,5.67,0,0,0,5.8,9.82a5.5,5.5,0,0,1,.8-1.26c-.3-.7-1.69-1.23-3.27-1.23C1.55,7.33,0,8,0,8.83s1.55,1.5,3.33,1.5ZM3.4,9c-.2-.06-.81-.11-.81-.45,0-.18.22-.35.64-.4V8h.21v.14A2.39,2.39,0,0,1,4,8.2l-.08.23a2.54,2.54,0,0,0-.47-.07H3.36c-.32,0-.34.19-.12.27s.84.19.84.49-.29.37-.64.4v.15H3.22V9.53a2.37,2.37,0,0,1-.64-.1l.1-.23a2.1,2.1,0,0,0,.56.08h.13C3.62,9.24,3.67,9.07,3.4,9Zm2.67,5.69a5.32,5.32,0,0,1-2.73.65c-1.78,0-3.33-.67-3.33-1.5V13.4a5.69,5.69,0,0,0,3.33.94,7.06,7.06,0,0,0,2.36-.41,5.17,5.17,0,0,0,.36.75ZM0,12.17v-.44a5.64,5.64,0,0,0,3.33.94,7.2,7.2,0,0,0,2-.29,4.8,4.8,0,0,0,.15.91,6.2,6.2,0,0,1-2.17.38C1.55,13.67,0,13,0,12.17ZM0,10.5v-.44A5.57,5.57,0,0,0,3.33,11a7,7,0,0,0,2.18-.34,4.93,4.93,0,0,0-.16,1,6.28,6.28,0,0,1-2,.32C1.55,12,0,11.33,0,10.5ZM7.33,3.17V2.73a5.65,5.65,0,0,0,3.34.94A5.64,5.64,0,0,0,14,2.73v.44c0,.83-1.55,1.5-3.33,1.5S7.33,4,7.33,3.17Zm0,3.33V6.07a4.65,4.65,0,0,0,1.92.8A5,5,0,0,0,8,7.39,1.16,1.16,0,0,1,7.33,6.5Zm0-1.67V4.4a5.64,5.64,0,0,0,3.34.93A5.63,5.63,0,0,0,14,4.4v.43c0,.83-1.55,1.5-3.33,1.5S7.33,5.66,7.33,4.83Z"></path></svg>`, 
+            company: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15" height="16" viewBox="0 0 15 16"><path data-name="Path 430-2" d="M7,5H0V16H7ZM3,14H1V13H3Zm3,0H4V13H6ZM3,12H1V11H3Zm3,0H4V11H6ZM3,10H1V9H3Zm3,0H4V9H6ZM3,8H1V7H3ZM6,8H4V7H6Zm4-7h3V2H10Zm3,3H10V3h3ZM12,5h2V6H12ZM9,5h2V6H9Zm3,2h2V8H12ZM9,7h2V8H9Zm3,2h2v1H12ZM9,9h2v1H9Zm3,2h2v1H12ZM9,11h2v1H9Zm3,2h2v1H12ZM9,13h2v1H9ZM8,4V16h7V4H14V1h1V0H8V1H9V4Z"></path></svg>`, 
+            award: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Union 27-2" d="M0,9a9,9,0,1,1,9,9A9,9,0,0,1,0,9ZM2.14,9A6.86,6.86,0,1,0,9,2.14H9A6.87,6.87,0,0,0,2.14,9ZM9,11.79,5.91,13.44,6.53,10,4,7.57l3.47-.48L9,3.93l1.53,3.16L14,7.57,11.47,10l.62,3.45Z"></path></svg>`, 
+            faction: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="12.47" height="17" viewBox="-1 1 12.47 17"><path d="M3.46,17H9.12V12.29A6,6,0,0,0,10.59,9L9,9.06,6.61,8v1.1H5.44l2.34,1.11L6.61,13.49,6,10.79,2.32,8.46V7.83L5.44,8,6.61,6.85l-4.5-2L0,8.08l3.46,4.3Zm6.66-9,1.61-1.42-.58-1.63L9.46,7.61ZM9,6.85,10.43,4,8.81,3.21l-1,3.64ZM6.61,5.74,8.25,2.63,6.46,1.87l-.77,3ZM2.73,3.84l2,.9L5.8,1.62,4.41,1Z"></path></svg>`,
+            job: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="13.33" viewBox="0 1 16 13.33"><path d="M16,14.33H0v-10H16ZM6,1A1.33,1.33,0,0,0,4.67,2.33V3.67H6v-1a.34.34,0,0,1,.33-.34H9.67a.34.34,0,0,1,.33.34v1h1.33V2.33A1.33,1.33,0,0,0,10,1Z"></path></svg>`,
+            friend: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="21" height="16" viewBox="0 1 21 16"><g><path d="M13.88,13.06c-2.29-.53-4.43-1-3.39-2.94C13.63,4.18,11.32,1,8,1S2.36,4.3,5.51,10.12c1.07,2-1.15,2.43-3.39,2.94C.13,13.52,0,14.49,0,16.17V17H16v-.83C16,14.49,15.87,13.52,13.88,13.06Z"></path><polygon points="18.5 7.5 16.5 7.5 16.5 5.5 14.5 5.5 14.5 7.5 12.5 7.5 12.5 9.5 14.5 9.5 14.5 11.5 16.5 11.5 16.5 9.5 18.5 9.5 18.5 7.5"></polygon></g></svg>`,
+            enemy: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="20" height="16" viewBox="0 1 20 16"><g><path d="M13.88,13.06c-2.29-.53-4.43-1-3.39-2.94C13.63,4.18,11.32,1,8,1S2.36,4.3,5.51,10.12c1.07,2-1.15,2.43-3.39,2.94C.13,13.52,0,14.49,0,16.17V17H16v-.83C16,14.49,15.87,13.52,13.88,13.06Z"></path><rect x="12.5" y="7.5" width="6" height="2"></rect></g></svg>`,
+            bounty: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Path 108-2" d="M9,0a9,9,0,1,0,9,9h0A9,9,0,0,0,9,0Zm7.5,8.25H15A6,6,0,0,0,9.83,3.07V1.57A7.59,7.59,0,0,1,16.5,8.25Zm-3.08,1.5a4.46,4.46,0,0,1-3.67,3.68V11.25H8.25v2.18A4.46,4.46,0,0,1,4.58,9.75H6.75V8.25H4.58A4.46,4.46,0,0,1,8.25,4.57V6.75h1.5V4.57a4.46,4.46,0,0,1,3.67,3.68H11.25v1.5ZM8.25,1.57v1.5A6,6,0,0,0,3.08,8.25H1.58A7.44,7.44,0,0,1,8.25,1.57ZM1.58,9.75h1.5a6,6,0,0,0,5.17,5.18v1.5A7.3,7.3,0,0,1,1.58,9.75ZM9.75,16.5V15a6,6,0,0,0,5.17-5.18h1.5A7.43,7.43,0,0,1,9.75,16.5Z"></path></svg>`,
+            race: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.01" height="14" viewBox="0 0 15.01 14"><path data-name="Path 13-2" d="M14,11.5a7.83,7.83,0,0,0-1.21-9.25A7.38,7.38,0,0,0,2.38,2.07l-.18.18A7.73,7.73,0,0,0,0,7.69,7.78,7.78,0,0,0,2.37,13.3l.73.7,1.37-1.5-.73-.7a6.41,6.41,0,0,1-.64-.74l1.22-.73L3.67,9.19l-1.22.72a5.82,5.82,0,0,1,0-4.45l1.22.73L4.32,5,3.1,4.32A5.44,5.44,0,0,1,6.85,2.1V3.54H8.14V2.1A5.48,5.48,0,0,1,11.9,4.32l-1.22.73.65,1.14,1.22-.72a5.75,5.75,0,0,1-.28,5c-.06.1-.12.21-.19.31l-1.14-.88.49,3.5,3.41-.49L13.69,12Q13.87,11.77,14,11.5Zm-6.51-5A1.17,1.17,0,0,0,6.32,7.66,1.15,1.15,0,0,0,7.45,8.84,1.14,1.14,0,0,0,8.63,7.72v0l2-1.88L8,6.67a1.07,1.07,0,0,0-.52-.14Z"></path></svg>`,
+            property: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 1 16 16"><path d="M10.24,1C6.08,1,4.47,6,7.73,9.27c2.09,2.09,5.24,2.33,7,.52C17.81,6.75,14.78,1,10.24,1Zm3.28,7.52c-1.33,1.33-3.38.62-3.21-1.14a.64.64,0,0,0-.69-.69c-1.74.17-2.47-1.88-1.14-3.21s3.37-.6,3.21,1.14a.62.62,0,0,0,.68.69C14.11,5.15,14.85,7.19,13.52,8.52ZM5.65,13.23l1.41,1.41-.94.95-.94-.95-.47.47.94.95L4.71,17,3.3,15.58,1.88,17,0,15.11,5.93,9.18a7.58,7.58,0,0,0,.86,1,7.42,7.42,0,0,0,1,.85Z"></path></svg>`,
+            heart: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="transparent" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`
+        }
+        
+        Object.entries(this.images).forEach(e => 
+        {
+            this.images[e[0] + "Green"] = e[1].replace(`fill="${originalColor}"`, `fill="${greenColor}"`);
+            this.images[e[0] + "Red"] = e[1].replace(`fill="${originalColor}"`, `fill="${redColor}"`);
+        });
+    }
+    
+    async stalk(index)
+    {
+        let now = Date.now();
+        //let updateSpan = this.contentElement.querySelector("h4 span");
+        
+        while(now > (this.targets[index].timestamp*1000 + 30000))
+        {
+            let targetUpdate;
+            let updateText = "";
+            
+            try
+            {
+                targetUpdate = await this.api(`/user/${this.targets[index].player_id}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+            }
+            catch(e)
+            {
+                for(let i = 0; i < 5; i++)
+                {
+                    await Utils.sleep(1000);
+                    //updateSpan.innerHTML = parseInt(updateSpan.innerHTML) + 1;
+                }
+                
+                break;
+            }
+            
+            //For code 9, "API disabled"
+            if(!targetUpdate.personalstats)
+            {
+                for(let i = 0; i < 29; i++)
+                {
+                    await Utils.sleep(1000);
+                    //updateSpan.innerHTML = parseInt(updateSpan.innerHTML) + 1;
+                }
+                
+                break;
+            }
+            
+            let modifiedFaction = {};
+            
+            this.targets[index].faction["faction_position"] = this.targets[index].faction["position"];
+            targetUpdate.faction["faction_position"] = targetUpdate.faction["position"];
+            
+            this.targets[index].job["company_position"] = this.targets[index].job["position"];
+            targetUpdate.job["company_position"] = targetUpdate.job["position"];
+            
+            this.targets[index].last_action["last_action_timestamp"] = this.targets[index].last_action["timestamp"];
+            targetUpdate.last_action["last_action_timestamp"] = targetUpdate.last_action["timestamp"];
+            
+            this.targets[index].last_action["last_action_status"] = this.targets[index].last_action["status"];
+            targetUpdate.last_action["last_action_status"] = targetUpdate.last_action["status"];
+            
+            let oldStats = {...this.targets[index].life, ...this.targets[index].company, ...this.targets[index].faction, ...this.targets[index].basicicons, ...this.targets[index].last_action, ...this.targets[index].criminalrecord, ...this.targets[index].personalstats, ...this.targets[index].status, ...this.targets[index]};
+            let newStats = {...targetUpdate.life, ...this.targets[index].company, ...targetUpdate.faction, ...targetUpdate.basicicons, ...targetUpdate.last_action, ...targetUpdate.criminalrecord, ...targetUpdate.personalstats, ...targetUpdate.status, ...targetUpdate};
+
+            let keys = Array.from(new Set(Object.keys(oldStats).concat(Object.keys(newStats))));
+            
+            let updateList = [];
+            
+            for(let statName of keys)
+            {
+                let oldStatValue = oldStats[statName];
+                let newStatValue = newStats[statName];
+                
+                if(typeof oldStatValue != "object" && newStatValue != oldStatValue)
+                {
+                    updateList.push(statName);
+                    
+                    updateText += this.handleActionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleStatusEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleEnergyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleCrimeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleDrugEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleItemEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handlePointEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleMessageEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleMoneyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleMiscEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleFactionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handleCompanyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    updateText += this.handlePropertyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                }
+            }
+
+            console.log(this.targets[index].name, Utils.stringifyTimestamp(this.targets[index].timestamp*1000) + " - " + Utils.stringifyTimestamp(targetUpdate.timestamp*1000), updateList);
+            
+            if(updateText.length > 0)
+            {
+                updateText = updateText.split("</li>").sort((a, b) => 
+                {
+                    if(!a)
+                    {
+                        return 1;
+                    }
+                    if(!b)
+                    {
+                        return -1;
+                    }
+                    
+                    let aValue = a.split(`class="stalker`)[1].split(`"`)[0];
+                    let bValue = b.split(`class="stalker`)[1].split(`"`)[0];
+                    
+                    return aValue == bValue ? 0 : (aValue > bValue ? -1 : 1);
+                    
+                }).join("</li>");
+                
+                let div = document.createElement("div");
+                div.className = "stalkerRow";
+                div.innerHTML = `
+                    <div class="stalkerTimeContainer"><span class="stalkerLink"><a href="/profiles.php?XID=${this.targetIDs[index]}">${this.targets[index].name} [${this.targetIDs[index]}]</a></span><span class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.targets[index].timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</span></div>
+                    <hr/>
+                    <ul class="stalkerText">${updateText}</ul>
+                `;
+                
+                this.targets[index].stalkerEvents.push({timestamp: now, outerHTML: div.outerHTML});
+                document.querySelector(".stalkerHistory").prepend(div);
+            }
+            
+            document.querySelectorAll(".stalkerTime").forEach(e => 
+            {
+                e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp), true) + " ago";
+            });
+            
+            targetUpdate.stalkerEvents = this.targets[index].stalkerEvents.slice(-100);
+            this.targets[index] = targetUpdate;
+            
+            this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
+            
+            this.targetsObject[this.targetIDs[index]] = this.targets[index];
+            
+            localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
+            
+            //updateSpan.innerHTML = -1;
+            
+            break;
+        }
+        
+        //updateSpan.innerHTML = parseInt(updateSpan.innerHTML) + 1;
+        
+        setTimeout(this.stalk.bind(this, index), 1000);
+    }
+    
+    handleActionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "last_action_status")
+        {
+            if(newStatValue == "Offline")
+            {
+                updateText += `<li class="stalkerMiscRed">Has gone offline</li>`;
+            }
+            else if(oldStatValue == "Offline")
+            {
+                let timeOffline = newStats.last_action_timestamp - oldStats.last_action_timestamp;
+                let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
+                let words = "";
+                
+                if(timeOffline > timeSinceLastUpdate)
+                {
+                    words = " after being offline for " + Utils.formatTime(timeOffline, true);
+                }
+                
+                updateText += `<li class="stalkerMiscGreen">Has come online${words}</li>`;
+            }
+        }
+        else if(statName == "last_action_timestamp")
+        {
+            let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
+            
+            if(difference >= 300 && difference > timeSinceLastUpdate)
+            {
+                //updateText += `<li class="stalkerMiscGreen">Came back after idling for ${Utils.formatTime(difference, true)}</li>`;
+            }
+        }
+        else if(statName == "useractivity")
+        {
+            let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
+            
+            if(timeSinceLastUpdate < 3600)
+            {
+                //updateText += `<li class="stalkerMisc">Was active for ${Utils.formatTime(difference)} the past ???</li>`;
+            }
+        }
+        
+        return updateText;
+    }
+    
+    handleEnergyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "attackswon")
+        {
+            updateText += `<li class="stalkerAttackGreen">Won ${difference} attack${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "attackslost")
+        {
+            updateText += `<li class="stalkerAttackRed">Lost ${difference} attack${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "attacksdraw")
+        {
+            updateText += `<li class="stalkerAttackRed">Made ${difference} attack${difference == 1 ? "" : "s"} and stalemated</li>`;
+        }
+        else if(statName == "yourunaway")
+        {
+            updateText += `<li class="stalkerAttackRed">Made ${difference} attack${difference == 1 ? "" : "s"} and ran away</li>`;
+        }
+        else if(statName == "attacksassisted")
+        {
+            updateText += `<li class="stalkerAttackGreen">Assisted in ${difference} attack${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "defendswon")
+        {
+            updateText += `<li class="stalkerAttackGreen">Was attacked ${difference} time${difference == 1 ? "" : "s"} and won</li>`;
+        }
+        else if(statName == "defendslost")
+        {
+            updateText += `<li class="stalkerAttackRed">Was attacked ${difference} time${difference == 1 ? "" : "s"} and lost</li>`;
+        }
+        else if(statName == "defendsstalemated")
+        {
+            updateText += `<li class="stalkerAttackGreen">Was attacked ${difference} time${difference == 1 ? "" : "s"} and stalemated</li>`;
+        }
+        else if(statName == "theyrunaway")
+        {
+            updateText += `<li class="stalkerAttackGreen">Was attacked ${difference} time${difference == 1 ? "" : "s"} but opponent ran away</li>`;
+        }
+        else if(statName == "elo")
+        {
+            let className;
+            let word;
+            
+            if(difference > 0)
+            {
+                className = "stalkerAttackGreen";
+                word = "Gained";
+            }
+            else
+            {
+                className = "stalkerAttackRed";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${Math.abs(difference)} elo rating and now has ${newStatValue.toLocaleString()}</li>`;
+        }
+        else if(statName == "peoplebusted")
+        {
+            updateText += `<li class="stalkerJailGreen">Busted ${difference} ${difference == 1 ? "person" : "people"} out of jail</li>`;
+        }
+        else if(statName == "revives")
+        {
+            updateText += `<li class="stalkerHospitalGreen">Revived ${difference} ${difference == 1 ? "person" : "people"}</li>`;
+        }
+        else if(statName == "revivesreceived")
+        {
+            updateText += `<li class="stalkerHospitalGreen">Was revived${difference > 1 ? " " + difference + " times" : ""}`;
+        }
+        else if(statName == "dumpsearches")
+        {
+            let dumpFinds = newStats["dumpfinds"] - oldStats["dumpfinds"];
+            
+            updateText += `<li class="stalkerMisc">Searched the dump ${difference} time${difference == 1 ? "" : "s"} and found ${dumpFinds} item${dumpFinds == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "contractscompleted")
+        {
+            let creditsGained = newStats["missioncreditsearned"] - oldStats["missioncreditsearned"];
+            
+            updateText += `<li class="stalkerContractGreen">Completed ${difference} contract${difference == 1 ? "" : "s"} and earned a total of ${creditsGained.toLocaleString()} mission credits</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleCrimeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        let crimeNames = 
+        {
+            "selling_illegal_products": "Sell Copied Media",
+            "theft": "Theft",
+            "auto_theft": "Grand Theft Auto",
+            "drug_deals": "Drugs",
+            "computer_crimes": "Computer",
+            "murder": "Murder",
+            "fraud_crimes": "Fraud"
+        };
+        
+        if(Object.keys(crimeNames).some(e => e == statName))
+        {
+            updateText += `<li class="stalkerCrimeGreen">Committed ${difference} crime${difference == 1 ? "" : "s"} of type: ${crimeNames[statName]}</li>`;
+        }
+        else if(statName == "organisedcrimes")
+        {
+            updateText += `<li class="stalkerCrimeGreen">Was part of ${difference} successful OC${difference == 1 ? "" : "s"}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleDrugEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        let drugNames = 
+        {
+            "cantaken": "Cannabis",
+            "exttaken": "Ecstasy",
+            "kettaken": "Ketamine",
+            "lsdtaken": "LSD",
+            "opitaken": "Opium",
+            "shrtaken": "Shrooms",
+            "spetaken": "Speed",
+            "pcptaken": "PCP",
+            "xantaken": "Xanax",
+            "victaken": "Vicodin",
+        };
+        
+        if(Object.keys(drugNames).some(e => e == statName))
+        {
+            let overdoses = newStats["overdosed"] - oldStats["overdosed"];
+            
+            if(overdoses > 0 && difference == 1)
+            {
+                updateText += `<li class="stalkerDrugRed">Overdosed on ${drugNames[statName]}</li>`;
+            }
+            else
+            {
+                updateText += `<li class="stalkerDrugGreen">Took ${difference} ${drugNames[statName]}</li>`;
+            }
+            
+            if(overdoses > 0 && difference > 1)
+            {
+                updateText += `<li class="stalkerDrugRed">Overdosed ${overdoses} time${overdoses == 1 ? "" : "s"}</li>`;
+            }
+        }
+        
+        return updateText;
+    }
+    
+    handleItemEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "medicalitemsused")
+        {
+            let bloodWithdrawn = newStats["bloodwithdrawn"] - oldStats["bloodwithdrawn"];
+            
+            if(bloodWithdrawn == difference)
+            {
+                updateText += `<li class="stalkerItemGreen">Filled ${bloodWithdrawn} blood bag${bloodWithdrawn == 1 ? "" : "s"}</li>`;
+            }
+            else if(bloodWithdrawn > 0)
+            {
+                updateText += `<li class="stalkerItemGreen">Filled ${bloodWithdrawn} blood bag${bloodWithdrawn == 1 ? "" : "s"} and used ${difference-bloodWithdrawn} other medical item${(difference-bloodWithdrawn) == 1 ? "" : "s"}</li>`;
+            }
+            else
+            {
+                updateText += `<li class="stalkerItemGreen">Used ${difference} medical item${difference == 1 ? "" : "s"}</li>`;
+            }
+        }
+        else if(statName == "candyused")
+        {
+            updateText += `<li class="stalkerItemGreen">Ate ${difference} ${difference == 1 ? "candy" : "candies"}</li>`;
+        }
+        else if(statName == "alcoholused")
+        {
+            updateText += `<li class="stalkerItemGreen">Drank ${difference} alcoholic beverage${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "energydrinkused")
+        {
+            updateText += `<li class="stalkerItemGreen">Drank ${difference} energy drink${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "statenhancersused")
+        {
+            updateText += `<li class="stalkerItemGreen">Used ${difference} stat enhancer${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "booksread")
+        {
+            updateText += `<li class="stalkerItemGreen">Used ${difference} book${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "boostersused")
+        {
+            updateText += `<li class="stalkerItemGreen">Used ${difference} booster${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "cityfinds")
+        {
+            updateText += `<li class="stalkerItemGreen">Found ${difference} item${difference == 1 ? "" : "s"} in the city</li>`;
+        }
+        else if(statName == "itemsdumped")
+        {
+            updateText += `<li class="stalkerItemRed">Dumped ${difference} item${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "cityitemsbought")
+        {
+            updateText += `<li class="stalkerItemGreen">Bought ${difference} item${difference == 1 ? "" : "s"} in the city</li>`;
+        }
+        else if(statName == "itemsboughtabroad")
+        {
+            let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
+            let country;
+            
+            if(oldStats.state == "Traveling" && timeSinceLastUpdate < 480)
+            {
+                country = oldStats.description.split("Traveling to ")[1];
+            }
+            else if(oldStats.state == "Abroad" && timeSinceLastUpdate < 480)
+            {
+                country = oldStats.description.split("In ")[1];
+            }
+            
+            if(country == "Cayman Islands" || country == "United Kingdom" || country == "United Arab Emirates")
+            {
+                country = "the " + country;
+            }
+            
+            updateText += `<li class="stalkerItemGreen">Bought ${difference} item${difference == 1 ? "" : "s"}${country ? " in " + country : " abroad"}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleMoneyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "rehabs")
+        {
+            let sum = newStats["rehabcost"] - oldStats["rehabcost"];
+            
+            updateText += `<li class="stalkerMoneyRed">Spent $${sum.toLocaleString()} on rehab</li>`;
+        }
+        else if(statName == "peoplebought")
+        {
+            let sum = newStats["peopleboughtspent"] - oldStats["peopleboughtspent"];
+            
+            updateText += `<li class="stalkerMoneyRed">Bought ${difference} ${difference == 1 ? "person" : "people"} out of jail for a total of $${sum.toLocaleString()}</li>`;
+        }
+        else if(statName == "moneymugged")
+        {
+            updateText += `<li class="stalkerMoneyGreen">Made $${difference.toLocaleString()} from mugging</li>`;
+        }
+        else if(statName == "pointsbought")
+        {
+            updateText += `<li class="stalkerMoneyRed">Bought ${difference.toLocaleString()} point${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "bountiesplaced")
+        {
+            let sum = newStats["totalbountyspent"] - oldStats["totalbountyspent"];
+            
+            updateText += `<li class="stalkerMoneyRed">Spent $${sum.toLocaleString()} on ${difference} ${difference == 1 ? "bounty" : "bounties"}</li>`;
+        }
+        else if(statName == "bountiescollected")
+        {
+            let sum = newStats["totalbountyreward"] - oldStats["totalbountyreward"];
+            
+            updateText += `<li class="stalkerMoneyGreen">Claimed ${difference} ${difference == 1 ? "bounty" : "bounties"} and made a total of $${sum.toLocaleString()}</li>`;
+        }
+        else if(statName == "icon35")
+        {
+            let className;
+            let word;
+            
+            if(!oldStatValue && newStatValue)
+            {
+                className = "stalkerBazaarGreen";
+                word = "Opened";
+            }
+            if(oldStatValue && !newStatValue)
+            {
+                className = "stalkerBazaarRed";
+                word = "Closed";
+            }
+            
+            updateText += `<li class="${className}">${word} their bazaar</li>`;
+        }
+        else if(statName == "auctionswon")
+        {
+            updateText += `<li class="stalkerMoneyRed">Bought ${difference.toLocaleString()} item${difference == 1 ? "" : "s"} at an auction</li>`;
+        }
+        else if(statName == "auctionsells")
+        {
+            updateText += `<li class="stalkerMoneyGreen">Sold ${difference.toLocaleString()} item${difference == 1 ? "" : "s"} at an auction</li>`;
+        }
+        else if(statName == "networth")
+        {
+            let className;
+            let word;
+            
+            if(difference > 0)
+            {
+                className = "stalkerMoneyGreen";
+                word = "increased";
+            }
+            else
+            {
+                className = "stalkerMoneyRed";
+                word = "decreased";
+            }
+            
+            updateText += `<li class="${className}">Daily networth ${word} by $${Math.abs(difference).toLocaleString()} to $${newStatValue.toLocaleString()}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handlePointEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "refills")
+        {
+            updateText += `<li class="stalkerPointsGreen">Used ${difference} Energy Refill${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "nerverefills")
+        {
+            updateText += `<li class="stalkerPointsGreen">Used ${difference} Nerve Refill${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "tokenrefills")
+        {
+            updateText += `<li class="stalkerPointsGreen">Used ${difference} Token Refill${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "jobpointsused")
+        {
+            updateText += `<li class="stalkerCompanyGreen">Used ${difference} job point${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "meritsbought")
+        {
+            updateText += `<li class="stalkerPointsGreen">Bought ${difference} merit${difference == 1 ? "" : "s"}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleMessageEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        let mailReceivers = 
+        {
+            "friendmailssent": "a friend",
+            "factionmailssent": "their faction",
+            "companymailssent": "their company",
+            "spousemailssent": "their spouse",
+            "mailssent": "a stranger"
+        };
+        
+        if(Object.keys(mailReceivers).some(e => e == statName))
+        {
+            if(statName == "mailssent")
+            {
+                difference -= newStats["friendmailssent"] - oldStats["friendmailssent"];
+                difference -= newStats["factionmailssent"] - oldStats["factionmailssent"];
+                difference -= newStats["companymailssent"] - oldStats["companymailssent"];
+                difference -= newStats["spousemailssent"] - oldStats["spousemailssent"];
+            }
+            
+            if(difference > 0)
+            {
+                updateText += `<li class="stalkerMessage">Sent ${difference} mail${difference == 1 ? "" : "s"} to ${mailReceivers[statName]}</li>`;
+            }
+        }
+        else if(statName == "forum_posts")
+        {
+            updateText += `<li class="stalkerMessage">Made ${difference} post${difference == 1 ? "" : "s"} on the forum</li>`;
+        }
+        else if(statName == "karma")
+        {
+            let className;
+            let word;
+            
+            if(difference > 0)
+            {
+                className = "stalkerMessageGreen";
+                word = "Gained";
+            }
+            else
+            {
+                className = "stalkerMessageRed";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${Math.abs(difference)} forum karma</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleStatusEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        let destinationNames = 
+        {
+            "argtravel": "Argentina",
+            "mextravel": "Mexico",
+            "dubtravel": "the United Arab Emirates",
+            "hawtravel": "Hawaii",
+            "japtravel": "Japan",
+            "lontravel": "the United Kingdom",
+            "soutravel": "South Africa",
+            "switravel": "Switzerland",
+            "chitravel": "China",
+            "cantravel": "Canada", 
+            "caytravel": "the Cayman Islands"
+        };
+        
+        let oldStatus = oldStats.status;
+        let newStatus = newStats.status;
+        let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
+        let wasReturning = oldStatus.description.includes("Returning");
+        let isReturning = newStatus.description.includes("Returning");
+        let newDestination = "";
+        let oldDestination = "";
+        
+        if(oldStatus.state == "Abroad")
+        {
+            oldDestination = oldStatus.description.split("In ")[1];
+        }
+        else if(oldStatus.state == "Traveling")
+        {
+            if(wasReturning)
+            {
+                oldDestination = oldStatus.description.split(" from ")[1];
+            }
+            else
+            {
+                oldDestination = oldStatus.description.split("Traveling to ")[1];
+            }
+        }
+        
+        if(oldDestination == "Cayman Islands" || oldDestination == "United Kingdom" || oldDestination == "United Arab Emirates")
+        {
+            oldDestination = "the " + oldDestination;
+        }
+        
+        if(newStatus.state == "Abroad")
+        {
+            newDestination = newStatus.description.split("In ")[1];
+        }
+        else if(newStatus.state == "Traveling")
+        {
+            if(wasReturning)
+            {
+                newDestination = newStatus.description.split(" from ")[1];
+            }
+            else
+            {
+                newDestination = newStatus.description.split("Traveling to ")[1];
+            }
+        }
+        
+        if(newDestination == "Cayman Islands" || newDestination == "United Kingdom" || newDestination == "United Arab Emirates")
+        {
+            newDestination = "the " + newDestination;
+        }
+        
+        if(statName == "name")
+        {
+            updateText += `<li class="stalkerMisc">Changed their name from ${oldStatValue} to ${newStatValue}</li>`;
+        }
+        else if(statName == "spouse_name")
+        {
+            let oldSpouseId = oldStats["spouse_id"];
+            let newSpouseId = newStats["spouse_id"];
+            
+            if(oldStatValue == "None")
+            {
+                updateText += `<li class="stalkerHeartRed">Married <a href="/profiles.php?XID=${newSpouseId}">${newStatValue}</a></li>`;
+            }
+            else if(newStatValue == "None")
+            {
+                updateText += `<li class="stalkerHeartRed">Divorced <a href="/profiles.php?XID=${oldSpouseId}">${oldStatValue}</a></li>`;
+            }
+            else if(oldSpouseId != newSpouseId)
+            {
+                updateText += `<li class="stalkerHeartRed">Divorced <a href="/profiles.php?XID=${oldSpouseId}">${oldStatValue}</a> and married <a href="/profiles.php?XID=${newSpouseId}">${newStatValue}</a></li>`;
+            }
+            else
+            {
+                updateText += `<li class="stalkerHeartRed">Spouse changed their name from ${oldStatValue} to ${newStatValue}</li>`;
+            }
+        }
+        else if(statName == "state")
+        {
+            if(oldStatus.state == "Jail")
+            {
+                updateText += `<li class="stalkerJailGreen">Was released from jail</li>`;
+            }
+            else if(oldStatus.state == "Hospital")
+            {
+                updateText += `<li class="stalkerHospitalGreen">Was released from the hospital</li>`;
+            }
+            
+            if(oldStatus.state == "Traveling" && timeSinceLastUpdate < 480)
+            {
+                if(wasReturning)
+                {
+                    updateText += `<li class="stalkerFlying">Landed in Torn City</li>`;
+                }
+                else
+                {
+                    updateText += `<li class="stalkerFlying">Landed in ${oldDestination}</li>`;
+                }
+            }
+            else if(oldStatus.state == "Abroad" && timeSinceLastUpdate < 480)
+            {
+                if(newStatus.state == "Traveling")
+                {
+                    updateText += `<li class="stalkerFlying">Boarded 1 plane to Torn City</li>`;
+                }
+            }
+            else if(newStatus.state == "Abroad" && timeSinceLastUpdate >= 480)
+            {
+                updateText += `<li class="stalkerFlying">Landed in ${newDestination}</li>`;
+            }
+        }
+        else if(statName == "until")
+        {
+            let details = newStatus.details;
+            if(details.slice(-1) == ".")
+            {
+                details = details.slice(0, -1);
+            }
+            if(details.slice(0, 3) == "Was")
+            {
+                details = details.slice(4);
+            }
+            
+            if(newStatus.state == "Jail")
+            {
+                if(oldStatus.state != "Jail")
+                {
+                    updateText += `<li class="stalkerJailRed">Was sent to jail (${details}), expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
+                }
+                else
+                {
+                    updateText += `<li class="stalkerJailGreen">Was released from jail</li>`;
+                    updateText += `<li class="stalkerJailRed">Was sent to jail (${details}), expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
+                }
+            }
+            else if(newStatus.state == "Hospital")
+            {
+                let words = "";
+                
+                if(timeSinceLastUpdate < 480)
+                {
+                    words = oldDestination ? " in " + oldDestination: "";
+                }
+                
+                if(oldStatus.state != "Hospital")
+                {
+                    updateText += `<li class="stalkerHospitalRed">Was sent to the hospital${words} (${details}), expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
+                }
+                else
+                {
+                    updateText += `<li class="stalkerHospitalGreen">Was released from hospital</li>`;
+                    updateText += `<li class="stalkerHospitalRed">Was sent to the hospital${words} (${details}), expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
+                }
+            }
+        }
+        else if(statName == "description")
+        {
+            if(oldStatus.state == "Traveling" && newStatus.state == "Traveling" && timeSinceLastUpdate < 480)
+            {
+                if(isReturning)
+                {
+                    updateText += `<li class="stalkerFlying">Landed in ${oldDestination}</li>`;
+                    updateText += `<li class="stalkerFlying">Boarded 1 plane to Torn City</li>`;
+                }
+                else if(wasReturning)
+                {
+                    updateText += `<li class="stalkerFlying">Landed in Torn City</li>`;
+                }
+            }
+        }
+        else if(Object.keys(destinationNames).some(e => e == statName))
+        {
+            updateText += `<li class="stalkerFlying">Boarded ${difference} plane${difference == 1 ? "" : "s"} to ${destinationNames[statName]}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleFactionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "faction_name")
+        {
+            if(oldStatValue == "None")
+            {
+                updateText += `<li class="stalkerFactionGreen">Joined the faction "${newStatValue}"</li>`;
+            }
+            else
+            {
+                updateText += `<li class="stalkerFactionRed">Left the faction "${oldStatValue}"</li>`;
+            }
+        }
+        else if(statName == "faction_position" && oldStats["faction_name"] == newStats["faction_name"])
+        {
+            updateText += `<li class="stalkerFaction">Changed faction position from ${oldStatValue} to ${newStatValue}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleCompanyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "company_name")
+        {
+            if(oldStatValue == "None")
+            {
+                updateText += `<li class="stalkerJobGreen">Joined the company "${newStatValue}"</li>`;
+            }
+            else
+            {
+                updateText += `<li class="stalkerJobRed">Left the company "${oldStatValue}"</li>`;
+            }
+        }
+        else if(statName == "company_position" && newStats["company_name"] != "None" && oldStats["company_name"] == newStats["company_name"])
+        {
+            updateText += `<li class="stalkerJob">Changed company position from ${oldStatValue} to ${newStatValue}</li>`;
+        }
+        else if(statName == "trainsreceived")
+        {
+            updateText += `<li class="stalkerJobGreen">Was trained by company director ${difference} time${difference == 1 ? "" : "s"}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleUpgradeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "level")
+        {
+            updateText += `<li class="stalkerUpgradeGreen">Gained ${difference} level${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "rank")
+        {
+            updateText += `<li class="stalkerUpgrade">Rank changed from "${oldStatValue}" to "${newStatValue}"</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handlePropertyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "property_id")
+        {
+            let oldPropertyName = oldStats["property"];
+            let newPropertyName = newStats["property"];
+            
+            let word = oldPropertyName == newPropertyName ? " another" : "";
+            
+            updateText += `<li class="stalkerProperty">Moved from ${oldPropertyName} to${word} ${newPropertyName}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleMiscEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    {
+        let updateText = "";
+        
+        if(statName == "awards")
+        {
+            updateText += `<li class="stalkerAwardGreen">Got ${difference} award${difference == 1 ? "" : "s"}</li>`;
+        }
+        //health
+        else if(statName == "current")
+        {
+            let max = newStats["maximum"];
+            let className;
+            let word;
+            
+            if(difference > 0)
+            {
+                className = "stalkerHospitalGreen";
+                word = "Gained";
+            }
+            else
+            {
+                className = "stalkerHospitalRed";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${Math.abs(difference).toLocaleString()} life and now has ${newStatValue.toLocaleString()} / ${max.toLocaleString()}</li>`;
+        }
+        else if(statName == "maximum")
+        {
+            let className;
+            let word;
+            
+            if(difference > 0)
+            {
+                className = "stalkerHospitalGreen";
+                word = "Gained";
+            }
+            else
+            {
+                className = "stalkerHospitalRed";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${Math.abs(difference).toLocaleString()} max life and now has ${newStatValue.toLocaleString()}</li>`;
+        }
+        else if(statName == "friends")
+        {
+            let className;
+            let word;
+            let anotherWord = "";
+            
+            if(difference > 0)
+            {
+                className = "stalkerFriendGreen";
+                word = "Made";
+                anotherWord = " new";
+            }
+            else
+            {
+                className = "stalkerFriendRed";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${Math.abs(difference)}${anotherWord} friend${Math.abs(difference) == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "enemies")
+        {
+            let className;
+            let word;
+            let anotherWord = "";
+            
+            if(difference > 0)
+            {
+                className = "stalkerEnemyRed";
+                word = "Made";
+                anotherWord = " new";
+            }
+            else
+            {
+                className = "stalkerEnemyGreen";
+                word = "Lost";
+            }
+            
+            updateText += `<li class="${className}">${word} ${Math.abs(difference)}${anotherWord} ${Math.abs(difference) == 1 ? "enemy" : "enemies"}</li>`;
+        }
+        else if(statName == "virusescoded")
+        {
+            updateText += `<li class="stalkerMisc">Finished coding ${difference} virus${difference == 1 ? "" : "es"}</li>`;
+        }
+        else if(statName == "bountiesreceived")
+        {
+            let sum = newStats["receivedbountyvalue"] - oldStats["receivedbountyvalue"];
+            
+            updateText += `<li class="stalkerBountyRed">Got ${difference} ${difference == 1 ? "bounty" : "bounties"} worth $${sum.toLocaleString()} placed on them</li>`;
+        }
+        else if(statName == "racesentered")
+        {
+            let won = newStats["raceswon"] - oldStats["raceswon"];
+            let lost = difference - won;
+            
+            if(won > 0)
+            {
+                updateText += `<li class="stalkerRaceGreen">Won ${won} race${won == 1 ? "" : "s"}</li>`;
+            }
+            
+            if(lost > 0)
+            {
+                updateText += `<li class="stalkerRaceRed">Lost ${lost} race${lost == 1 ? "" : "s"}</li>`;
+            }
+        }
+        else if(statName == "racingpointsearned")
+        {
+            updateText += `<li class="stalkerRaceGreen">Gained ${difference.toLocaleString()} racing point${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "donator")
+        {
+            let className;
+            let words;
+            
+            if(newStatValue == 1)
+            {
+                className = "stalkerUpgradeGreen";
+                words = "Became a donator";
+            }
+            else
+            {
+                className = "stalkerUpgradeRed";
+                words = "Lost their donator status"
+            }
+            
+            updateText += `<li class="${className}">${words}</li>`;
+        }
+        
+        return updateText;
+    }
+}
+
 class AutomaticDarkModeModule extends BaseModule
 {
     constructor(darkPercent, lightPercent)
@@ -404,11 +1669,12 @@ class AutomaticDarkModeModule extends BaseModule
             }
         }
         GM_addStyle(`
-            .custom-bg-desktop, .custom-bg-mobile
+            .custom-bg-desktop, .custom-bg-mobile, .custom-bg-desktop::before, .custom-bg-mobile::before
             {
                 background-image: none !important;
+                background-color: var(--main-bg) !important;
             }
-            
+
             :root
             {
                 ${cssResult}
@@ -3229,721 +4495,6 @@ class PowerLevelModule extends BaseModule
         li.innerHTML = `<div class="user-information-section"><span class="bold">Power level</span></div><div class="user-info-value"><span class="bold" title="${this.breakdownString}">${(this.powerLevel/127).toLocaleString().split(".")[0]}</span></div>`;
         
         infoTable.firstChild.after(li);
-    }
-}
-
-class ActivityStalkerModule extends BaseModule
-{
-    constructor()
-    {
-        super("&page=Stalker");
-        
-        if(document.location.href.includes("/profiles.php?XID"))
-        {
-            this.addAjaxListener("getProfileData", false, (json) => 
-            {
-                let newButton = 
-                {
-                    actionDescription: "Stalk", 
-                    link: document.location.href + "&page=Stalker", 
-                    message: `Start stalking ${json.user.playerName}`,
-                    state: "active"
-                };
-
-                let newButtonsObject = {};
-                
-                for(let [name, button] of Object.entries(json.profileButtons.buttons))
-                {
-                    newButtonsObject[name] = button;
-                    
-                    if(name == "personalStats")
-                    {
-                        newButtonsObject.stalk = newButton;
-                    }
-                }
-                
-                json.profileButtons.buttons = newButtonsObject;
-
-                return json;
-            });
-            
-            this.modifyProfileButton();
-        }
-        
-        this.ready();
-    }
-    
-    async init()
-    {
-        this.replaceContent("content-wrapper", async element =>
-        {
-            this.contentElement = element;
-            this.contentElement.classList.add("stalkerContainer");
-            
-            this.targetId = document.location.href.split("XID=")[1].split("&")[0];
-            this.targets = JSON.parse(localStorage.getItem("AquaTools_Stalker_targets") || "{}");
-            
-            if(this.targets.hasOwnProperty(this.targetId))
-            {
-                this.target = this.targets[this.targetId];
-            }
-            else
-            {
-                this.target = await this.api(`/user/${this.targetId}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
-                this.targets[this.targetId] = this.target;
-            }
-            
-            if(!this.target.hasOwnProperty("stalkerEvents"))
-            {
-                this.target.stalkerEvents = [];
-            }
-            
-            localStorage.setItem("AquaTools_Stalker_targets", JSON.stringify(this.targets));
-            
-            this.loadImageUrls();
-            this.addStyle();
-            this.addHeader();
-            this.addBody();
-            this.addStalkerEvents();
-            
-            this.stalk();
-        });
-    }
-    
-    async modifyProfileButton()
-    {
-        let button;
-        
-        while(!(button = document.querySelector(".profile-button-stalk")))
-        {
-            await Utils.sleep(100);
-        }
-        
-        let buttonSVG = `<svg viewBox="-2 -2 36 36" xmlns="http://www.w3.org/2000/svg"><defs><style>.cls-1{fill:#101820;}</style></defs><title/><g data-name="Layer 3" id="Layer_3"><path class="cls-1" d="M11,22A10,10,0,1,1,21,12,10,10,0,0,1,11,22ZM11,4a8,8,0,1,0,8,8A8,8,0,0,0,11,4Z"/><path class="cls-1" d="M28,29.74a3,3,0,0,1-1.93-.7L19.94,23.9a3,3,0,0,1,3.86-4.6l6.13,5.14A3,3,0,0,1,28,29.74ZM21.87,20.6h-.09a1,1,0,0,0-.55,1.77l6.13,5.14a1,1,0,0,0,1.41-.12,1,1,0,0,0,.23-.73,1,1,0,0,0-.36-.68l-6.13-5.15A1,1,0,0,0,21.87,20.6Z"/><path class="cls-1" d="M20,21a1,1,0,0,1-.64-.23L17,18.82a1,1,0,0,1,1.28-1.54l2.34,1.95a1,1,0,0,1,.13,1.41A1,1,0,0,1,20,21Z"/></g></svg>`;
-        
-        button.innerHTML = buttonSVG;
-    }
-    
-    addStyle()
-    {
-        let style = `
-        .stalkerHistory *
-        {
-            all: revert;
-        }
-        
-        .stalkerHistory a
-        {
-            color: var(--default-color);
-        }
-        
-        .stalkerRow
-        {
-            margin-bottom: 10px;
-            padding: 4px;
-            border: 1px solid var(--default-color);
-        }
-        
-        .stalkerTime
-        {
-            font-weight: 600;
-            text-align: center;
-            margin: 2px 0;
-        }
-        
-        ul.stalkerText
-        {
-            padding-left: 10px;
-        }
-        
-        ul.stalkerText li
-        {
-            list-style-type: none;
-            margin-bottom: 5px;
-            padding-left: 22px;
-            line-height: 20px;
-        }
-        
-        `;
-        
-        for(let [name, image] of Object.entries(this.images))
-        {
-            style += `
-                .stalker${name[0].toUpperCase() + name.slice(1)}
-                {
-                    background: url("data:image/svg+xml;base64,${window.btoa(image)}") no-repeat left center;
-                }
-            `;
-        }
-        
-        GM_addStyle(style);
-    }
-    
-    addHeader()
-    {
-        this.contentElement.innerHTML = `
-        <div class="content-title m-bottom10">
-            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Activity Stalker - ${this.target.name} [${this.targetId}]</h4>
-        <div class="clear"></div>
-        <hr class="page-head-delimiter">
-        </div>
-        `;
-    }
-    
-    addBody()
-    {
-        let html = "";
-        
-        for(let [id, title] of [["okayTargets", "Top targets"], ["busyTargets", "Waiting targets"], ["idleTargets", "Upcoming targets"], ["unknownTargets", "Outdated targets"]])
-        {
-            html += `
-                <div class="stalkerHistory">
-
-                </div>`;
-        }
-
-        this.contentElement.innerHTML += html;
-    }
-    
-    addStalkerEvents()
-    {
-        let history = document.querySelector(".stalkerHistory");
-        
-        for(let event of this.target.stalkerEvents.sort((a, b) => b.timestamp - a.timestamp))
-        {
-            history.innerHTML += event.outerHTML;
-        }
-        
-        document.querySelectorAll(".stalkerTime").forEach(e => 
-        {
-            e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp)) + " ago";
-        });
-    }
-    
-    loadImageUrls()
-    {
-        let greenColor = "#d8f5a2";
-        let redColor = "#ffa8a8";
-        let originalColor = "#ffffff"
-        
-        this.images = 
-        {
-            attack: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18.01" height="12.7" viewBox="0 0 18.01 12.7"><path data-name="Path 282-2" d="M6.63,4.6v.56a.78.78,0,0,0,.77.77L9.28,6a.79.79,0,0,0,.77-.77A1.23,1.23,0,0,0,10,4.6a.21.21,0,0,0-.07.14h0a.08.08,0,0,1,.07.07h0c0,.07,0,.07-.07.07a1.46,1.46,0,0,1-.7,1,.07.07,0,0,1-.07-.07H9.07c-.14,0-.07-.21-.07-.21l.27-.84A2.61,2.61,0,0,0,9,4L7.4,3.83a.78.78,0,0,0-.77.77ZM.22.42.5.07H.64l.2.35H15.2L15.34,0h.28l.14.42h.49a.31.31,0,0,1,.28.21V2.09l-.07.07v.49a.31.31,0,0,1,.14.28c0,.21-.14.21-.14.21a2.62,2.62,0,0,0-.63.14c-.63.21-.7.83-.56,1.74a5,5,0,0,0,.63,1.67c-.07,0-.07,0-.07.07s.07.07.14.07L16,6.9C16,6.9,16,6.9,16,7S16,7,16.11,7l.07.07c-.07,0-.07,0-.07.07s.07.07.14.07l.07.07c-.07,0-.07,0-.07.07a.21.21,0,0,0,.13.07l.07.07c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.14c-.07,0-.07,0-.07.07a.27.27,0,0,0,.14.07l.07.07-.07.07.07.07.07.14a.08.08,0,0,0-.07.07h0l.07.07.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.07.07,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0a.08.08,0,0,0,.07.07h0l.07.14h0l.07.07a.27.27,0,0,0,.07.13h0v.07c0,.07.07.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07c0,.07,0,.07.07.14h0l.07.07v.42a1.29,1.29,0,0,1-.07.7c-.14.28-.7.49-.7.49h-.56V12a1.05,1.05,0,0,1,.28.49c0,.27-.41.2-.41.2H13.74c-.63,0-.56-.41-.56-.41l-.07-.42a2.5,2.5,0,0,1-.35-.21.78.78,0,0,1-.14-.42v-.49a3.38,3.38,0,0,0-.28-.83.8.8,0,0,0-.41-.42c-.14-.07-.07-.14-.07-.14a.81.81,0,0,0,0-.77c-.14-.28-.21-.48-.42-.55s-.14-.21-.14-.21.21-.28-.07-1c-.21-.42-.42-.56-.7-.56a1.68,1.68,0,0,0-.7.21A3.41,3.41,0,0,1,9,6.56L6.28,6.42l-.07-.14.07-.14a2.28,2.28,0,0,0,.13-1,3.46,3.46,0,0,0-.07-.91,1.91,1.91,0,0,0-.55-.42s-4.53-.13-5-.2S.28,3.29.28,3.29.21,2.8.21,2.66V2.38H.14V2h0L.07,1.89A1.61,1.61,0,0,1,0,1.4.9.9,0,0,1,.14.92V.78C.14.71.21.78.21.64A.13.13,0,0,1,.34.5h0L.21.43Z"></path></svg>`, 
-            item: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path d="M10.59,6.67A4,4,0,0,1,10.45,1l.07-.07L9.59,0h3.74V3.74l-.93-.93S9.57,3.93,10.59,6.67ZM8.65,1l-1-1L2.85,2.82l1.33.78ZM16,5.36v7.22L10,16V8.58ZM8.65,7.78l-6.73-4L0,6.43l6.74,4Zm-7.32,1v2.86l7.34,4.18V10L7.11,12.19Z"></path></svg>`, 
-            bazaar: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16.2" viewBox="0 0 16 16.2"><path data-name="Path 222-2" d="M3.33,4.13A1.33,1.33,0,0,0,4.67,5.4,1.28,1.28,0,0,0,6,4.17V3.4L6.6.07H5.33l-2,3.33Zm-.66,0V3.4L4.6.07H3.27L0,3.4v.73A1.32,1.32,0,0,0,1.33,5.4,1.29,1.29,0,0,0,2.67,4.17v0ZM12.73,0H11.4l1.93,3.27V4a1.34,1.34,0,0,0,1.34,1.33A1.28,1.28,0,0,0,16,4.1V3.33ZM8,5.4A1.33,1.33,0,0,0,9.33,4.07V3.33L8.6.07H7.33L6.67,3.33v.74A1.33,1.33,0,0,0,8,5.4Zm2-1.33A1.34,1.34,0,0,0,11.33,5.4a1.29,1.29,0,0,0,1.34-1.23V3.4l-2-3.33H9.4L10,3.33ZM.67,16.2H15.33V6.87H.67ZM2,8.2H14v4.67H2Z"></path></svg>`, 
-            points: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Path 295-2" d="M2.14,9A6.86,6.86,0,1,1,9,15.86,6.86,6.86,0,0,1,2.14,9ZM0,9A9,9,0,1,0,9,0,9,9,0,0,0,0,9ZM10,9H8V7h2ZM6,5v8H8V11h2a2,2,0,0,0,2-2V7a2,2,0,0,0-2-2Z"></path></svg>`, 
-            crime: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path d="M7.1,14.81a17.77,17.77,0,0,1-3.87,1.82.68.68,0,0,1-.54-.05.62.62,0,0,1-.32-.6.64.64,0,0,1,.43-.54C6.27,14.3,9.24,12.14,10.59,9a2.05,2.05,0,0,0-1-2.72,1.94,1.94,0,0,0-1-.17A2.31,2.31,0,0,0,6.33,7.59c-.8,1.85-2.82,3.32-5.52,4.08A.65.65,0,0,1,0,11.23a.77.77,0,0,1,0-.15.63.63,0,0,1,.48-.63c2.31-.65,4-1.85,4.65-3.35A3.72,3.72,0,0,1,10,5.18,3.65,3.65,0,0,1,11.56,6.4a3.13,3.13,0,0,1,.23,3.1,11,11,0,0,1-1.95,3A12.88,12.88,0,0,1,7.1,14.8ZM1,14.36c3.47-.82,6.78-2.72,8.16-5.92a.62.62,0,0,0-.33-.82h0A.65.65,0,0,0,8,8C7,10.41,4.27,12.3.75,13.13a.63.63,0,0,0-.5.74.63.63,0,0,0,.74.5Zm15.57.92a.6.6,0,0,0,.2-.56.61.61,0,0,0-.38-.47,3.5,3.5,0,0,1-1.72-1.18,3.86,3.86,0,0,1-.09-2.76c.28-1.54.63-3.46-.76-5.4A6.22,6.22,0,0,0,9.42,2.42,6.79,6.79,0,0,0,4.19,4.1,6.74,6.74,0,0,0,2.91,5.78a3.65,3.65,0,0,1-2.32,2A.63.63,0,0,0,.71,9,.65.65,0,0,0,1,9,4.79,4.79,0,0,0,4,6.42,5.53,5.53,0,0,1,5.07,5a5.39,5.39,0,0,1,4.2-1.35,4.92,4.92,0,0,1,3.52,1.95c1.08,1.51.81,3,.55,4.46a4.86,4.86,0,0,0,.26,3.65,4.59,4.59,0,0,0,2.27,1.65.72.72,0,0,0,.73-.11Zm-8.8.91c-.3.17-.67.38-1.15.61a.64.64,0,0,0-.35.67.66.66,0,0,0,.76.52l.17,0c.31-.16.58-.3.82-.44.93-.51,1-.52,1.9.11l.35.25a.67.67,0,0,0,.48.1.65.65,0,0,0,.52-.49.62.62,0,0,0-.27-.65c-.37-.26-.65-.47-.86-.63-.87-.68-1.16-.7-2.38,0ZM1.16,4.91A.57.57,0,0,0,2,4.77H2l.39-.56A7.56,7.56,0,0,1,9.67,1.34c2.89.37,5.26,2,6,4.1a8.17,8.17,0,0,1,.2,4.62c-.19,1-.35,2,.22,2.69a2.34,2.34,0,0,0,1,.7.64.64,0,0,0,.81-.36.54.54,0,0,0,0-.22.67.67,0,0,0-.43-.62,1,1,0,0,1-.41-.27c-.23-.29-.12-.92,0-1.71A9.33,9.33,0,0,0,16.93,5C16,2.45,13.2.52,9.84.09A10.39,10.39,0,0,0,8.47,0,8.79,8.79,0,0,0,1.92,2.7,4.82,4.82,0,0,0,1,4.08a.6.6,0,0,0,.17.83h0Zm10.63,8.81a.66.66,0,0,0-.88-.23.62.62,0,0,0-.26.84v0a7,7,0,0,0,2.77,2.56.69.69,0,0,0,.61,0h0a.63.63,0,0,0,.3-.83.57.57,0,0,0-.27-.28,5.77,5.77,0,0,1-2.28-2.1Z"></path></svg>`, 
-            hospital: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 0 16 16"><path data-name="Path 1-2" d="M6,0V6H0v4H6v6h4V10h6V6H10V0Z"></path></svg>`, 
-            flying: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.99" height="14.93" viewBox="0 0 15.99 14.93"><path data-name="Path 5-2" d="M15.2.05a1.29,1.29,0,0,0-1,.35L11.09,3.05a1.3,1.3,0,0,1-1.16.2L9.18,3a.52.52,0,0,1-.34-.65.51.51,0,0,1,.09-.16l.53-.78a.22.22,0,0,0,0-.32h0a.89.89,0,0,0-.8-.15,1.34,1.34,0,0,0-.4.27l-.54.59a1.37,1.37,0,0,1-1.14.38L5.28,1.89c-.37-.07-.51-.35-.31-.62L5.34.78A.6.6,0,0,0,5.48.36C5.45.11,5-.06,4.7,0a2.45,2.45,0,0,0-1,.71L3.64.86a1.67,1.67,0,0,1-1.14.49l-1.07,0c-.38,0-.85-.16-1.08-.14A.37.37,0,0,0,0,1.41a.7.7,0,0,0,0,.38c.06.21.52.43.85.61,1.47.8,4.62,2.46,5.94,3.15a.44.44,0,0,1,.25.57.39.39,0,0,1-.16.2L3.13,9.67A1.48,1.48,0,0,1,2,10l-.39-.1a2.27,2.27,0,0,0-1-.1,1.29,1.29,0,0,0-.58.68c-.07.33.46.72.81.86A3.44,3.44,0,0,1,2.06,12a4,4,0,0,1,.8,1.37c.13.35.35.88.62.84A.84.84,0,0,0,3.91,14l.21-.24a1.17,1.17,0,0,0,.06-.9l-.06-.24a1.17,1.17,0,0,1,.37-1.1L8.8,7.93a.48.48,0,0,1,.69,0,.42.42,0,0,1,.11.18l2.72,6.23c.15.34.69.81.81.45a2.69,2.69,0,0,0,0-1.13l-.07-.61a1.37,1.37,0,0,1,.47-1l.88-.7a1.14,1.14,0,0,0,.36-.53c.1-.34-.18-.8-.4-.77a5.81,5.81,0,0,0-.92.4c-.3.14-.57-.05-.6-.42l0-.69a1.26,1.26,0,0,1,.53-1.05l.23-.14a2.34,2.34,0,0,0,.91-1h0A.72.72,0,0,0,14,6.33a4.88,4.88,0,0,0-1.13.26.56.56,0,0,1-.7-.38.59.59,0,0,1,0-.13l0-.35a1.53,1.53,0,0,1,.43-1.14l2.73-2.5A2.35,2.35,0,0,0,16,1a.66.66,0,0,0,0-.14A.88.88,0,0,0,15.2.05Z"></path></svg>`, 
-            misc: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14" height="13.96" viewBox="0 0 14 13.96"><path data-name="Union 21-2" d="M2.78,12.55h0A7.38,7.38,0,0,1,1.56,11.4L0,13V7.29c0-.1,0-.2,0-.3H6L4.15,8.81a3.39,3.39,0,0,0,2.59,1.55.73.73,0,0,0,.25,0,3.13,3.13,0,0,0,2-.63A3.53,3.53,0,0,0,10,8.6l2.57,2.59a7,7,0,0,1-9.78,1.36ZM14,7H8L9.85,5.15a3.34,3.34,0,0,0-2-1.46c0-1.82,0-3,0-3.64a7,7,0,0,1,4.58,2.52L14,1V6.67c0,.11,0,.2,0,.3ZM.06,6.11A7,7,0,0,1,2.57,1.57L1,0H7C7,1.11,7,3.86,7,6L5.15,4.15a3.39,3.39,0,0,0-1.45,2H.06Z"></path></svg>`, 
-            jail: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16.06" height="16" viewBox="0 0 16.06 16"><path data-name="Path 3-2" d="M10.88,0V16h1.88V0ZM6.18,11.82H9.94V9.94H6.18ZM0,11.82H2.41V9.94H0Zm13.71,0h2.35V9.94H13.71ZM6.18,6.18H9.94V4.29H6.18ZM0,6.18H2.41V4.29H0Zm13.71,0h2.35V4.29H13.71ZM3.35,0V16H5.24V0Z"></path></svg>`, 
-            drug: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="17" viewBox="0 0 16 17"><path data-name="Path 416-2" d="M16,9.6a9.4,9.4,0,0,0-5.1,1.8,16.8,16.8,0,0,0,3.3-8.3,16.68,16.68,0,0,0-5.3,8.4A18.3,18.3,0,0,0,8,0a17.91,17.91,0,0,0-.8,11.6A17.89,17.89,0,0,0,1.8,3.1a16.8,16.8,0,0,0,3.3,8.3A9.4,9.4,0,0,0,0,9.6a9.22,9.22,0,0,0,3.8,3.6,4.25,4.25,0,0,0-1.4,1.3s2.8,0,4-1.9c.2,0,.6,1.7.6,1.8v2.1a.47.47,0,0,0,.44.5H7.7a.47.47,0,0,0,.5-.44V14.4s.3-1.7.6-1.8c1.3,1.9,4.6,1.9,4.6,1.9A4.25,4.25,0,0,0,12,13.2,9,9,0,0,0,16,9.6Z"></path></svg>`, 
-            upgrade: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14.67" height="16" viewBox="0 0 14.67 16"><path d="M10.67,14.67V16H4V14.67Zm0-2.67H4v1.33h6.67ZM4,7.33v3.34h6.67V7.33h4L7.33,0,0,7.33Z"></path></svg>`, 
-            contract: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="14.66" viewBox="0 0 16 14.66"><path data-name="Path 37-2" d="M4,6.67a2.66,2.66,0,0,0,5.18.84l1.48-.86v0a4,4,0,1,1-2-3.47l-1.48.86A2.65,2.65,0,0,0,4.05,6.15a2.24,2.24,0,0,0,0,.52ZM6.67,5.34A1.33,1.33,0,1,0,8,6.67H8l2.24-1.3a3,3,0,0,1,2.47.11L16,3.56,13.9,2.51,14,.09,10.71,2A3,3,0,0,1,9.57,4.2L7.31,5.51a1.3,1.3,0,0,0-.64-.17Zm6.63,1.9A1.39,1.39,0,0,0,12,6.61v.06a5.36,5.36,0,1,1-2.64-4.6A1.83,1.83,0,0,0,9.46.62a6.66,6.66,0,0,0-7.24,11l-.87,2.7a.26.26,0,0,0,.17.33.25.25,0,0,0,.26-.06l2-1.92a6.64,6.64,0,0,0,5.77,0l2,1.92a.27.27,0,0,0,.37,0,.25.25,0,0,0,.06-.26l-.87-2.7a6.65,6.65,0,0,0,2.2-4.38Z"></path></svg>`, 
-            message: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.99" height="14.67" viewBox="0 0 15.99 14.67"><path data-name="Path 71-2" d="M13.07,13.74c-3.36.82-5.8-1.24-5.8-3.44s2.07-3.65,4.36-3.65S16,8.19,16,10.3a3.2,3.2,0,0,1-.74,2A5.82,5.82,0,0,0,16,14.67,10.68,10.68,0,0,1,13.07,13.74ZM5.93,10.3c0-2.75,2.56-5,5.7-5a6.45,6.45,0,0,1,1.7.23C13.32,2.32,10.16,0,6.67,0S0,2.35,0,5.57A4.86,4.86,0,0,0,1.14,8.7,8.73,8.73,0,0,1,0,12.24a16,16,0,0,0,4.43-1.41A10.19,10.19,0,0,0,6,11.07a4.9,4.9,0,0,1-.08-.77Z"></path></svg>`, 
-            money: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="14.67" height="16" viewBox="0 0 14.67 16"><path d="M10.67,8a4,4,0,1,0,4,4A4,4,0,0,0,10.67,8ZM11,13.65V14h-.33v-.33a2.45,2.45,0,0,1-1-.24l.15-.55a2.08,2.08,0,0,0,1.07.18c.39-.09.47-.48,0-.67s-1.26-.27-1.26-1.08a1,1,0,0,1,1-1V10H11v.34a3.13,3.13,0,0,1,.81.14l-.12.55a2.05,2.05,0,0,0-.81-.16c-.5,0-.54.46-.19.64.57.27,1.31.47,1.31,1.18S11.55,13.57,11,13.65Zm1.08-6.79A4.46,4.46,0,0,0,14,6.07V6.5a1.14,1.14,0,0,1-.67.89A5.11,5.11,0,0,0,12.08,6.86ZM10.67,3C12.45,3,14,2.33,14,1.5S12.45,0,10.67,0,7.33.67,7.33,1.5,8.89,3,10.67,3Zm.06-1.34c-.2-.06-.81-.11-.81-.45,0-.19.22-.36.64-.4V.67h.21V.81a2.39,2.39,0,0,1,.53.06l-.08.23A1.91,1.91,0,0,0,10.75,1H10.7c-.32,0-.35.19-.13.27s.85.19.85.49-.29.36-.65.4v.15h-.21V2.19a2.3,2.3,0,0,1-.64-.09l.1-.23a2.61,2.61,0,0,0,.55.08h.14c.25,0,.3-.2,0-.28Zm-7.4,8.67A5.67,5.67,0,0,0,5.8,9.82a5.5,5.5,0,0,1,.8-1.26c-.3-.7-1.69-1.23-3.27-1.23C1.55,7.33,0,8,0,8.83s1.55,1.5,3.33,1.5ZM3.4,9c-.2-.06-.81-.11-.81-.45,0-.18.22-.35.64-.4V8h.21v.14A2.39,2.39,0,0,1,4,8.2l-.08.23a2.54,2.54,0,0,0-.47-.07H3.36c-.32,0-.34.19-.12.27s.84.19.84.49-.29.37-.64.4v.15H3.22V9.53a2.37,2.37,0,0,1-.64-.1l.1-.23a2.1,2.1,0,0,0,.56.08h.13C3.62,9.24,3.67,9.07,3.4,9Zm2.67,5.69a5.32,5.32,0,0,1-2.73.65c-1.78,0-3.33-.67-3.33-1.5V13.4a5.69,5.69,0,0,0,3.33.94,7.06,7.06,0,0,0,2.36-.41,5.17,5.17,0,0,0,.36.75ZM0,12.17v-.44a5.64,5.64,0,0,0,3.33.94,7.2,7.2,0,0,0,2-.29,4.8,4.8,0,0,0,.15.91,6.2,6.2,0,0,1-2.17.38C1.55,13.67,0,13,0,12.17ZM0,10.5v-.44A5.57,5.57,0,0,0,3.33,11a7,7,0,0,0,2.18-.34,4.93,4.93,0,0,0-.16,1,6.28,6.28,0,0,1-2,.32C1.55,12,0,11.33,0,10.5ZM7.33,3.17V2.73a5.65,5.65,0,0,0,3.34.94A5.64,5.64,0,0,0,14,2.73v.44c0,.83-1.55,1.5-3.33,1.5S7.33,4,7.33,3.17Zm0,3.33V6.07a4.65,4.65,0,0,0,1.92.8A5,5,0,0,0,8,7.39,1.16,1.16,0,0,1,7.33,6.5Zm0-1.67V4.4a5.64,5.64,0,0,0,3.34.93A5.63,5.63,0,0,0,14,4.4v.43c0,.83-1.55,1.5-3.33,1.5S7.33,5.66,7.33,4.83Z"></path></svg>`, 
-            company: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15" height="16" viewBox="0 0 15 16"><path data-name="Path 430-2" d="M7,5H0V16H7ZM3,14H1V13H3Zm3,0H4V13H6ZM3,12H1V11H3Zm3,0H4V11H6ZM3,10H1V9H3Zm3,0H4V9H6ZM3,8H1V7H3ZM6,8H4V7H6Zm4-7h3V2H10Zm3,3H10V3h3ZM12,5h2V6H12ZM9,5h2V6H9Zm3,2h2V8H12ZM9,7h2V8H9Zm3,2h2v1H12ZM9,9h2v1H9Zm3,2h2v1H12ZM9,11h2v1H9Zm3,2h2v1H12ZM9,13h2v1H9ZM8,4V16h7V4H14V1h1V0H8V1H9V4Z"></path></svg>`
-        }
-        
-        Object.entries(this.images).forEach(e => 
-        {
-            this.images[e[0] + "Green"] = e[1].replace(`fill="${originalColor}"`, `fill="${greenColor}"`);
-            this.images[e[0] + "Red"] = e[1].replace(`fill="${originalColor}"`, `fill="${redColor}"`);
-        });
-    }
-    
-    async stalk()
-    {
-        let now = Date.now();
-        
-        while(now > (this.target.timestamp*1000 + 30000))
-        {
-            let targetUpdate = await this.api(`/user/${this.target.player_id}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
-            let updateText = "";
-            
-            //For code 9, "API disabled"
-            if(!targetUpdate.personalstats)
-            {
-                await Utils.sleep(29000);
-                break;
-            }
-            
-            for(let [statName, oldStatValue] of Object.entries(this.target.last_action))
-            {
-                if(targetUpdate.last_action[statName] != oldStatValue)
-                {
-                    updateText += this.handleActionEvents(statName, targetUpdate);
-                }
-            }
-            
-            for(let [statName, oldStatValue] of Object.entries(this.target.criminalrecord))
-            {
-                if(targetUpdate.criminalrecord[statName] != oldStatValue)
-                {
-                    updateText += this.handleCrimeEvents(statName, targetUpdate);
-                }
-            }
-            
-            for(let [statName, oldStatValue] of Object.entries(this.target.personalstats))
-            {
-                if(targetUpdate.personalstats[statName] != oldStatValue)
-                {
-                    updateText += this.handleEnergyEvents(statName, targetUpdate);
-                    updateText += this.handleCrimeEvents(statName, targetUpdate);
-                    updateText += this.handleDrugEvents(statName, targetUpdate);
-                    updateText += this.handleItemEvents(statName, targetUpdate);
-                    updateText += this.handlePointEvents(statName, targetUpdate);
-                    updateText += this.handleMessageEvents(statName, targetUpdate);
-                    updateText += this.handleMoneyEvents(statName, targetUpdate);
-                }
-            }
-            
-            for(let [statName, oldStatValue] of Object.entries(this.target.status))
-            {
-                if(targetUpdate.status[statName] != oldStatValue)
-                {
-                    updateText += this.handleStatusEvents(statName, targetUpdate);
-                }
-            }
-            
-            for(let [statName, oldStatValue] of Object.entries(this.target))
-            {
-                if(targetUpdate[statName] != oldStatValue)
-                {
-                    updateText += this.handleMessageEvents(statName, targetUpdate);
-                }
-            }
-
-            if(updateText.length > 0)
-            {
-                let div = document.createElement("div");
-                div.className = "stalkerRow";
-                div.innerHTML = `
-                    <div class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.target.timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</div>
-                    <hr/>
-                    <ul class="stalkerText">${updateText}</ul>
-                `;
-                
-                this.target.stalkerEvents.push({timestamp: now, outerHTML: div.outerHTML});
-                document.querySelector(".stalkerHistory").prepend(div);
-            }
-            
-            document.querySelectorAll(".stalkerTime").forEach(e => 
-            {
-                e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp)) + " ago";
-            });
-            
-            targetUpdate.stalkerEvents = this.target.stalkerEvents.slice(-100);
-            this.target = targetUpdate;
-            
-            this.targets = JSON.parse(localStorage.getItem("AquaTools_Stalker_targets") || "{}");
-            
-            this.targets[this.targetId] = this.target;
-            
-            localStorage.setItem("AquaTools_Stalker_targets", JSON.stringify(this.targets));
-            
-            break;
-        }
-        
-        setTimeout(this.stalk.bind(this), 1000);
-    }
-    
-    handleActionEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        if(statName == "status")
-        {
-            let newStatus = newTarget.last_action.status;
-            let oldStatus = this.target.last_action.status;
-            
-            if(newStatus == "Offline")
-            {
-                updateText += `<li class="stalkerMiscRed">Has gone offline</li>`;
-            }
-            else if(newStatus == "Online" && oldStatus == "Offline")
-            {
-                updateText += `<li class="stalkerMiscGreen">Has come online</li>`;
-            }
-        }
-        
-        return updateText;
-    }
-    
-    handleEnergyEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        if(statName == "attackswon")
-        {
-            let attacksWon = newTarget.personalstats["attackswon"] - this.target.personalstats["attackswon"];
-            
-            updateText += `<li class="stalkerAttackGreen">Won ${attacksWon} attack${attacksWon == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "attackslost")
-        {
-            let attacksLost = newTarget.personalstats["attackslost"] - this.target.personalstats["attackslost"];
-
-            updateText += `<li class="stalkerAttackRed">Lost ${attacksLost} attack${attacksLost == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "defendswon")
-        {
-            let defendsWon = newTarget.personalstats["defendswon"] - this.target.personalstats["defendswon"];
-            
-            updateText += `<li class="stalkerAttackGreen">Was attacked ${defendsWon} time${defendsWon == 1 ? "" : "s"} and won</li>`;
-        }
-        else if(statName == "defendslost")
-        {
-            let defendsLost = newTarget.personalstats["defendslost"] - this.target.personalstats["defendslost"];
-            
-            updateText += `<li class="stalkerAttackRed">Was attacked ${defendsLost} time${defendsLost == 1 ? "" : "s"} and lost</li>`;
-        }
-        else if(statName == "elo")
-        {
-            let eloDifference = newTarget.personalstats["elo"] - this.target.personalstats["elo"];
-            let className;
-            let word;
-            
-            if(eloDifference > 0)
-            {
-                className = "stalkerAttackGreen";
-                word = "Gained";
-            }
-            else
-            {
-                className = "stalkerAttackRed";
-                word = "Lost";
-            }
-            
-            updateText += `<li class="${className}">${word} ${Math.abs(eloDifference)} elo rating and now has ${newTarget.personalstats["elo"].toLocaleString()}</li>`;
-        }
-        else if(statName == "peoplebusted")
-        {
-            let peopleBusted = newTarget.personalstats["peoplebusted"] - this.target.personalstats["peoplebusted"];
-            
-            updateText += `<li class="stalkerJailGreen">Busted ${peopleBusted} ${peopleBusted == 1 ? "person" : "people"} out of jail</li>`;
-        }
-        else if(statName == "revives")
-        {
-            let revives = newTarget.personalstats["revives"] - this.target.personalstats["revives"];
-            
-            updateText += `<li class="stalkerHospitalGreen">Revived ${revives} ${revives == 1 ? "person" : "people"}</li>`;
-        }
-        else if(statName == "dumpsearches")
-        {
-            let dumpSearches = newTarget.personalstats["dumpsearches"] - this.target.personalstats["dumpsearches"];
-            let dumpFinds = newTarget.personalstats["dumpfinds"] - this.target.personalstats["dumpfinds"];
-            
-            updateText += `<li class="stalkerMisc">Searched the dump ${dumpSearches} time${dumpSearches == 1 ? "" : "s"} and found ${dumpFinds} item${dumpFinds == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "contractscompleted")
-        {
-            let contractsDone = newTarget.personalstats["contractscompleted"] - this.target.personalstats["contractscompleted"];
-            let creditsGained = newTarget.personalstats["missioncreditsearned"] - this.target.personalstats["missioncreditsearned"];
-            
-            updateText += `<li class="stalkerContractGreen">Completed ${contractsDone} contract${contractsDone == 1 ? "" : "s"} and earned a total of ${creditsGained.toLocaleString()} mission credits</li>`;
-        }
-        
-        return updateText;
-    }
-    
-    handleCrimeEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        let crimeNames = 
-        {
-            "selling_illegal_products": "Sell Copied Media",
-            "theft": "Theft",
-            "auto_theft": "Grand Theft Auto",
-            "drug_deals": "Drugs",
-            "computer_crimes": "Computer",
-            "murder": "Murder",
-            "fraud_crimes": "Fraud"
-        };
-        
-        if(Object.keys(crimeNames).some(e => e == statName))
-        {
-            let crimeAmount = newTarget.criminalrecord[statName] - this.target.criminalrecord[statName];
-            
-            updateText += `<li class="stalkerCrimeGreen">Committed ${crimeAmount} crime${crimeAmount == 1 ? "" : "s"} of type: ${crimeNames[statName]}</li>`;
-        }
-        else if(statName == "organisedcrimes")
-        {
-            let amount = newTarget.criminalrecord[organisedcrimes] - this.target.criminalrecord[organisedcrimes];
-            
-            updateText += `<li class="stalkerCrimeGreen">Was part of ${amount} successful OC${amount == 1 ? "" : "s"}</li>`;
-        }
-        
-        return updateText;
-    }
-    
-    handleDrugEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        let drugNames = 
-        {
-            "cantaken": "Cannabis",
-            "exttaken": "Ecstasy",
-            "kettaken": "Ketamine",
-            "lsdtaken": "LSD",
-            "opitaken": "Opium",
-            "shrtaken": "Shrooms",
-            "spetaken": "Speed",
-            "pcptaken": "PCP",
-            "xantaken": "Xanax",
-            "victaken": "Vicodin",
-        };
-        
-        if(Object.keys(drugNames).some(e => e == statName))
-        {
-            let amountTaken = newTarget.personalstats[statName] - this.target.personalstats[statName];
-            let didOD = (newTarget.personalstats["overdosed"] - this.target.personalstats["overdosed"]) > 0;
-            
-            if(didOD && amountTaken == 1)
-            {
-                updateText += `<li class="stalkerDrugRed">Overdosed on ${drugNames[statName]}</li>`;
-            }
-            else
-            {
-                updateText += `<li class="stalkerDrugGreen">Took ${amountTaken} ${drugNames[statName]}</li>`;
-            }
-        }
-        
-        return updateText;
-    }
-    
-    handleItemEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        if(statName == "medicalitemsused")
-        {
-            let medicalItemsUsed = newTarget.personalstats["medicalitemsused"] - this.target.personalstats["medicalitemsused"];
-            
-            updateText += `<li class="stalkerItemGreen">Used ${medicalItemsUsed} medical item${medicalItemsUsed == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "candyused")
-        {
-            let candyUsed = newTarget.personalstats["candyused"] - this.target.personalstats["candyused"];
-            
-            updateText += `<li class="stalkerItemGreen">Ate ${candyUsed} ${candyUsed == 1 ? "candy" : "candies"}</li>`;
-        }
-        else if(statName == "alcoholused")
-        {
-            let alcoholUsed = newTarget.personalstats["alcoholused"] - this.target.personalstats["alcoholused"];
-            
-            updateText += `<li class="stalkerItemGreen">Drank ${alcoholUsed} alcoholic beverage${alcoholUsed == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "energydrinkused")
-        {
-            let energydrinkUsed = newTarget.personalstats["energydrinkused"] - this.target.personalstats["energydrinkused"];
-            
-            updateText += `<li class="stalkerItemGreen">Drank ${energydrinkUsed} energy drink${energydrinkUsed == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "statenhancersused")
-        {
-            let statenhancersUsed = newTarget.personalstats["statenhancersused"] - this.target.personalstats["statenhancersused"];
-            
-            updateText += `<li class="stalkerItemGreen">Used ${statenhancersUsed} stat enhancer${statenhancersUsed == 1 ? "" : "s"}</li>`;
-        }
-        
-        return updateText;
-    }
-    
-    handleMoneyEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        if(statName == "rehabcost")
-        {
-            let cost = newTarget.personalstats["rehabcost"] - this.target.personalstats["rehabcost"];
-            
-            updateText += `<li class="stalkerMoneyRed">Spent $${cost.toLocaleString()} on rehab</li>`;
-        }
-        else if(statName == "peoplebought")
-        {
-            let peopleBought = newTarget.personalstats["peoplebought"] - this.target.personalstats["peoplebought"];
-            let sum = newTarget.personalstats["peopleboughtspent"] - this.target.personalstats["peopleboughtspent"];
-            
-            updateText += `<li class="stalkerMoneyRed">Bought ${peopleBought} ${peopleBought == 1 ? "person" : "people"} out of jail for a total of $${sum.toLocaleString()}</li>`;
-        }
-        else if(statName == "moneymugged")
-        {
-            let mugged = newTarget.personalstats["moneymugged"] - this.target.personalstats["moneymugged"];
-            
-            updateText += `<li class="stalkerMoneyGreen">Mugged $${mugged.toLocaleString()}</li>`;
-        }
-        else if(statName == "pointsbought")
-        {
-            let bought = newTarget.personalstats["pointsbought"] - this.target.personalstats["pointsbought"];
-            
-            updateText += `<li class="stalkerMoneyRed">Bought ${bought.toLocaleString()} point${bought == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "bountiesplaced")
-        {
-            let bountiesPlaced = newTarget.personalstats["bountiesplaced"] - this.target.personalstats["bountiesplaced"];
-            let sum = newTarget.personalstats["totalbountyspent"] - this.target.personalstats["totalbountyspent"];
-            
-            updateText += `<li class="stalkerMoneyRed">Spent $${sum.toLocaleString()} on ${bountiesPlaced} ${bountiesPlaced == 1 ? "bounty" : "bounties"}</li>`;
-        }
-        else if(statName == "bountiescollected")
-        {
-            let bounties = newTarget.personalstats["bountiescollected"] - this.target.personalstats["bountiescollected"];
-            let sum = newTarget.personalstats["totalbountyreward"] - this.target.personalstats["totalbountyreward"];
-            
-            updateText += `<li class="stalkerMoneyGreen">Claimed ${bounties} ${bounties == 1 ? "bounty" : "bounties"} and made a total of $${sum.toLocaleString()}`;
-        }
-        
-        return updateText;
-    }
-    
-    handlePointEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        if(statName == "refills")
-        {
-            let energyRefills  = newTarget.personalstats["refills"] - this.target.personalstats["refills"];
-            
-            updateText += `<li class="stalkerPointsGreen">Used ${energyRefills} Energy Refill${energyRefills == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "nerverefills")
-        {
-            let nerveRefills  = newTarget.personalstats["nerverefills"] - this.target.personalstats["nerverefills"];
-            
-            updateText += `<li class="stalkerPointsGreen">Used ${nerveRefills} Nerve Refill${nerveRefills == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "tokenrefills")
-        {
-            let tokenRefills  = newTarget.personalstats["tokenrefills"] - this.target.personalstats["tokenrefills"];
-            
-            updateText += `<li class="stalkerPointsGreen">Used ${tokenRefills} Token Refill${tokenRefills == 1 ? "" : "s"}</li>`;
-        }
-        else if(statName == "jobpointsused")
-        {
-            let jobpointsUsed = newTarget.personalstats["jobpointsused"] - this.target.personalstats["jobpointsused"];
-            
-            updateText += `<li class="stalkerCompanyGreen">Used ${jobpointsUsed} job point${jobpointsUsed == 1 ? "" : "s"}</li>`;
-        }
-        
-        return updateText;
-    }
-    
-    handleMessageEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        let mailReceivers = 
-        {
-            "friendmailssent": "a friend",
-            "factionmailssent": "their faction",
-            "companymailssent": "their company",
-            "spousemailssent": "their spouse",
-            "mailssent": "a stranger"
-        };
-        
-        if(Object.keys(mailReceivers).some(e => e == statName))
-        {
-            let amountSent = newTarget.personalstats[statName] - this.target.personalstats[statName];
-            
-            if(statName == "mailssent")
-            {
-                amountSent -= newTarget.personalstats["friendmailssent"] - this.target.personalstats["friendmailssent"];
-                amountSent -= newTarget.personalstats["factionmailssent"] - this.target.personalstats["factionmailssent"];
-                amountSent -= newTarget.personalstats["companymailssent"] - this.target.personalstats["companymailssent"];
-                amountSent -= newTarget.personalstats["spousemailssent"] - this.target.personalstats["spousemailssent"];
-            }
-            
-            if(amountSent > 0)
-            {
-                updateText += `<li class="stalkerMessage">Sent ${amountSent} mail${amountSent == 1 ? "" : "s"} to ${mailReceivers[statName]}</li>`;
-            }
-        }
-        else if(statName == "forum_posts")
-        {
-            let amount = newTarget.forum_posts - this.target.forum_posts;
-            
-            updateText += `<li class="stalkerMessage">Made ${Math.abs(amount)} post${Math.abs(amount) == 1 ? "" : "s"} on the forum</li>`;
-        }
-        else if(statName == "karma")
-        {
-            let amount = newTarget.karma - this.target.karma;
-            
-            let className;
-            let word;
-            
-            if(amount > 0)
-            {
-                className = "stalkerMessageGreen";
-                word = "Gained";
-            }
-            else
-            {
-                className = "stalkerMessageRed";
-                word = "Lost";
-            }
-            
-            updateText += `<li class="${className}">${word} ${amount} forum karma</li>`;
-        }
-        
-        return updateText;
-    }
-    
-    handleStatusEvents(statName, newTarget)
-    {
-        let updateText = "";
-        
-        if(statName == "state")
-        {
-            let oldStatus = this.target.status;
-            let newStatus = newTarget.status;
-            
-            if(newStatus.state == "Jail")
-            {
-                updateText += `<li class="stalkerJailRed">Was sent to jail, (${newStatus.details}) expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
-            }
-            else if(newStatus.state == "Hospital")
-            {
-                updateText += `<li class="stalkerHospitalRed">Was sent to hospital (${newStatus.details}), expecting to be released at ${Utils.stringifyTimestamp(newStatus.until*1000)}</li>`;
-            }
-            else if(newStatus.state == "Okay")
-            {
-                if(oldStatus.state == "Jail")
-                {
-                    updateText += `<li class="stalkerJailGreen">Was released from jail</li>`;
-                }
-                else if(oldStatus.state == "Hospital")
-                {
-                    updateText += `<li class="stalkerHospitalGreen">Was released from hospital</li>`;
-                }
-            }
-            else if(newStatus.state == "Traveling")
-            {
-                if(oldStatus.state == "Abroad")
-                {
-                    updateText += `<li class="stalkerFlying">Started flying from ${oldStatus.description.split("In ")[1]} to Torn City</li>`;
-                }
-                else
-                {
-                    updateText += `<li class="stalkerFlying">Started flying from Torn City to ${newStatus.description.split("Traveling to ")[1]}</li>`;
-                }
-            }
-            else if(oldStatus.state == "Traveling")
-            {
-                if(newStatus.state == "Abroad")
-                {
-                    updateText += `<li class="stalkerFlying">Landed in ${oldStatus.description.split("Traveling to ")[1]}</li>`;
-                }
-                else
-                {
-                    updateText += `<li class="stalkerFlying">Landed in Torn City</li>`;
-                }
-            }
-        }
-        
-        return updateText;
     }
 }
 
