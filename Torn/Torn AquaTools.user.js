@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.0.0
+// @version      2.0.1
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -510,6 +510,7 @@ class ActivityStalkerModule extends BaseModule
         {
             all: revert;
             
+            color: #999 !important;
             text-decoration: none !important;
         }
         
@@ -4887,7 +4888,7 @@ class SettingsModule extends BaseModule
                     isActive: false, 
                     needsApiKey: true, 
                     description: `This simplifies the art of stalking to a one-click-action. A new button is added to every player's profile, click it and you'll start tracking everything there is to track about them.<br/><br/>
-                    As long as you stay on that page, it'll retrieve new information every 30 seconds and display any changes. If you <i>do</i> leave the page, most things will still be tracked and be shown the next time you visit. 
+                    As long as you stay on that page, it'll retrieve new information every 30 seconds and display any changes. If you <i>do</i> leave the page, most things will still be tracked and are shown the next time you visit. 
                     Not all things however, as some events need the (close to) real-time data to trigger updates.<br/><br/>
                     You also have the option of manually replacing the player ID in the URL with a comma-separated list of IDs, this allows you to track up to 5 people at once.`,
                     settingsHidden: true, 
