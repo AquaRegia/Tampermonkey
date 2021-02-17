@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      1.49
+// @version      2.0.0
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -378,9 +378,13 @@ Object.defineProperty(BaseModule, "_apiModule", {value: new ApiModule()})
 
 class ActivityStalkerModule extends BaseModule
 {
-    constructor()
+    constructor(hideLifeRegen, inactivityTimeout)
     {
         super("&page=ActivityStalker");
+        
+        this.showNaturalLifeRegen = hideLifeRegen == "false";
+        this.inactivityTimeout = inactivityTimeout ? inactivityTimeout*60 : Number.MAX_VALUE;
+        this.startedStalkingAt = parseInt(Date.now()/1000);
         
         if(document.location.href.includes("/profiles.php?XID") && !document.location.href.includes("&page=ActivityStalker"))
         {
@@ -424,9 +428,11 @@ class ActivityStalkerModule extends BaseModule
             this.contentElement = element;
             this.contentElement.classList.add("stalkerContainer");
             
-            this.targetIDs = document.location.href.split("XID=")[1].split("&")[0].split(",");
+            this.targetIDs = document.location.href.split("XID=")[1].split("&")[0].split(",").slice(0, 5);
             this.targets = [];
             this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
+            
+            let targetsRemoved = 0;
             
             for(let i = 0; i < this.targetIDs.length; i++)
             {
@@ -437,15 +443,25 @@ class ActivityStalkerModule extends BaseModule
                 else
                 {
                     let target = await this.api(`/user/${this.targetIDs[i]}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                    
+                    if(target.error)
+                    {
+                        this.targetIDs[i] = 0;
+                        targetsRemoved++;
+                        continue;
+                    }
+                    
                     this.targetsObject[this.targetIDs[i]] = target;
                     this.targets.push(target);
                 }
                 
-                if(!this.targets[i].hasOwnProperty("stalkerEvents"))
+                if(!this.targets[i-targetsRemoved].hasOwnProperty("stalkerEvents"))
                 {
-                    this.targets[i].stalkerEvents = [];
+                    this.targets[i-targetsRemoved].stalkerEvents = [];
                 }
             }
+            
+            this.targetIDs = this.targetIDs.filter(e => e > 0);
             
             localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
             
@@ -453,6 +469,7 @@ class ActivityStalkerModule extends BaseModule
             this.addStyle();
             this.addHeader();
             this.addBody();
+            this.addJs();
             this.addStalkerEvents();
             
             document.title = "Stalking - " + this.targets.map(e => e.name).join(", ") + " | TORN";
@@ -461,6 +478,8 @@ class ActivityStalkerModule extends BaseModule
             {
                 this.stalk(i);
             }
+            
+            this.updateTimestamps();
         });
     }
     
@@ -481,7 +500,7 @@ class ActivityStalkerModule extends BaseModule
     addStyle()
     {
         let style = `
-        .stalkerHistory *
+        .stalkerInnerContainer *
         {
             all: revert;
             color: #999;
@@ -492,6 +511,10 @@ class ActivityStalkerModule extends BaseModule
             all: revert;
             
             text-decoration: none !important;
+        }
+        
+        .stalkerContainer
+        {
             color: #999 !important;
         }
         
@@ -516,6 +539,14 @@ class ActivityStalkerModule extends BaseModule
             position: relative;
         }
         
+        @media screen and (max-width: 1000px)
+        {
+            .stalkerTimeContainer
+            {
+                text-align: right;
+            }
+        }
+        
         .stalkerTimeContainer > .stalkerLink
         {
             display: inline-block;
@@ -535,6 +566,39 @@ class ActivityStalkerModule extends BaseModule
             margin-bottom: 5px;
             padding-left: 22px;
             line-height: 20px;
+        }
+        
+        span[class^='stalkerCountdown']
+        {
+            font-family: Courier New;
+            font-weight: 600;
+        }
+        
+        #stalkerInnerContainer form input, #stalkerInnerContainer form label
+        {
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        
+        #stalkerInnerContainer form li
+        {
+            margin-bottom: 3px;
+        }
+        
+        #stalkerInnerContainer fieldset
+        {
+            margin-bottom: 10px;
+            display: inline-block;
+            border: 1px solid #999;
+            padding: 4px 6px 2px;
+            background-color: #222;
+        }
+        
+        #stalkerInnerContainer legend
+        {
+            margin: 0 auto;
+            padding: 6px 6px 0;
+            background-color: #222;
         }
         
         `;
@@ -566,11 +630,44 @@ class ActivityStalkerModule extends BaseModule
     addBody()
     {
         let html = `
+        <div id="stalkerInnerContainer">
+            <form style="display: ${this.targets.length == 1 ? "none" : "block"};">
+                <fieldset>
+                    <legend>Filter</legend>
+                    <ul>
+                    ${this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.player_id + "'> <label for='stalkerFilter-" + e.player_id + "'>" + e.name + " (<span class='stalkerCountdown-" + e.player_id + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("")}
+                    </ul>
+                </fieldset>
+            </form>
             <div class="stalkerHistory">
 
-            </div>`;
+            </div>
+        </div>`;
 
         this.contentElement.innerHTML += html;
+    }
+    
+    addJs()
+    {
+        document.querySelectorAll("#stalkerInnerContainer input").forEach(input => 
+        {
+            input.addEventListener("change", e => 
+            {
+                let shouldShow = Array.from(document.querySelectorAll("#stalkerInnerContainer input:checked")).map(e => e.id.split("-")[1]);
+                
+                document.querySelectorAll(".stalkerRow").forEach(row => 
+                {
+                    if(shouldShow.some(e => row.classList.contains(e)))
+                    {
+                        row.style.display = "block";
+                    }
+                    else
+                    {
+                        row.style.display = "none";
+                    }
+                });
+            });
+        });
     }
     
     addStalkerEvents()
@@ -581,11 +678,16 @@ class ActivityStalkerModule extends BaseModule
         {
             history.innerHTML += event.outerHTML;
         }
-        
+    }
+    
+    updateTimestamps()
+    {
         document.querySelectorAll(".stalkerTime").forEach(e => 
         {
             e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp), true) + " ago";
         });
+        
+        setTimeout(this.updateTimestamps.bind(this), 1000);
     }
     
     loadImageUrls()
@@ -632,7 +734,7 @@ class ActivityStalkerModule extends BaseModule
     async stalk(index)
     {
         let now = Date.now();
-        //let updateSpan = this.contentElement.querySelector("h4 span");
+        let countdownSpan = document.querySelector(".stalkerCountdown-" + this.targets[index].player_id);
         
         while(now > (this.targets[index].timestamp*1000 + 30000))
         {
@@ -648,7 +750,7 @@ class ActivityStalkerModule extends BaseModule
                 for(let i = 0; i < 5; i++)
                 {
                     await Utils.sleep(1000);
-                    //updateSpan.innerHTML = parseInt(updateSpan.innerHTML) + 1;
+                    countdownSpan.innerHTML = String(Math.max(0, parseInt(countdownSpan.innerHTML) - 1)).padLeft(2, "0");
                 }
                 
                 break;
@@ -660,7 +762,7 @@ class ActivityStalkerModule extends BaseModule
                 for(let i = 0; i < 29; i++)
                 {
                     await Utils.sleep(1000);
-                    //updateSpan.innerHTML = parseInt(updateSpan.innerHTML) + 1;
+                    countdownSpan.innerHTML = String(Math.max(0, parseInt(countdownSpan.innerHTML) - 1)).padLeft(2, "0");
                 }
                 
                 break;
@@ -686,6 +788,7 @@ class ActivityStalkerModule extends BaseModule
             let keys = Array.from(new Set(Object.keys(oldStats).concat(Object.keys(newStats))));
             
             let updateList = [];
+            let doNotLog = ["ticktime", "timestamp", "isInactive", "inactiveAt", "relative", "fulltime", "updatedInactivityAt"];
             
             for(let statName of keys)
             {
@@ -694,21 +797,26 @@ class ActivityStalkerModule extends BaseModule
                 
                 if(typeof oldStatValue != "object" && newStatValue != oldStatValue)
                 {
-                    updateList.push(statName);
+                    if(!doNotLog.includes(statName))
+                    {
+                        updateList.push(statName);
+                    }
                     
-                    updateText += this.handleActionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleStatusEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleEnergyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleCrimeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleDrugEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleItemEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handlePointEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleMessageEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleMoneyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleMiscEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleFactionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handleCompanyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
-                    updateText += this.handlePropertyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue);
+                    let params = [statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue, this.targets[index], targetUpdate];
+                    
+                    updateText += this.handleActionEvents(...params);
+                    updateText += this.handleStatusEvents(...params);
+                    updateText += this.handleEnergyEvents(...params);
+                    updateText += this.handleCrimeEvents(...params);
+                    updateText += this.handleDrugEvents(...params);
+                    updateText += this.handleItemEvents(...params);
+                    updateText += this.handlePointEvents(...params);
+                    updateText += this.handleMessageEvents(...params);
+                    updateText += this.handleMoneyEvents(...params);
+                    updateText += this.handleMiscEvents(...params);
+                    updateText += this.handleFactionEvents(...params);
+                    updateText += this.handleCompanyEvents(...params);
+                    updateText += this.handlePropertyEvents(...params);
                 }
             }
 
@@ -734,10 +842,13 @@ class ActivityStalkerModule extends BaseModule
                     
                 }).join("</li>");
                 
+                let display = Array.from(document.querySelectorAll("#stalkerInnerContainer input:checked")).map(e => e.id.split("-")[1]).includes(this.targetIDs[index]) ? "block" : "none";
+                
                 let div = document.createElement("div");
-                div.className = "stalkerRow";
+                div.className = "stalkerRow " + targetUpdate.player_id;
+                div.style.display = display;
                 div.innerHTML = `
-                    <div class="stalkerTimeContainer"><span class="stalkerLink"><a href="/profiles.php?XID=${this.targetIDs[index]}">${this.targets[index].name} [${this.targetIDs[index]}]</a></span><span class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.targets[index].timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</span></div>
+                    <div class="stalkerTimeContainer"><span class="stalkerLink"><a style="color: var(--default${targetUpdate.status.color ? "-" + targetUpdate.status.color : ""}-color) !important;" href="/profiles.php?XID=${this.targetIDs[index]}">${this.targets[index].name} [${this.targetIDs[index]}]</a></span><span class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.targets[index].timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</span></div>
                     <hr/>
                     <ul class="stalkerText">${updateText}</ul>
                 `;
@@ -746,12 +857,8 @@ class ActivityStalkerModule extends BaseModule
                 document.querySelector(".stalkerHistory").prepend(div);
             }
             
-            document.querySelectorAll(".stalkerTime").forEach(e => 
-            {
-                e.title = Utils.formatTime(parseInt(Date.now()/1000) - parseInt(e.dataset.timestamp), true) + " ago";
-            });
-            
             targetUpdate.stalkerEvents = this.targets[index].stalkerEvents.slice(-100);
+            
             this.targets[index] = targetUpdate;
             
             this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
@@ -760,63 +867,71 @@ class ActivityStalkerModule extends BaseModule
             
             localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
             
-            //updateSpan.innerHTML = -1;
+            countdownSpan.innerHTML = 31;
             
             break;
         }
         
-        //updateSpan.innerHTML = parseInt(updateSpan.innerHTML) + 1;
+        countdownSpan.innerHTML = String(Math.max(0, parseInt(countdownSpan.innerHTML) - 1)).padLeft(2, "0");
         
         setTimeout(this.stalk.bind(this, index), 1000);
     }
     
-    handleActionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleActionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
-        if(statName == "last_action_status")
+        if(statName == "timestamp")
         {
-            if(newStatValue == "Offline")
+            let timeInactive = parseInt(Date.now()/1000) - newStats.last_action_timestamp;
+            let stalkingTime = parseInt(Date.now()/1000) - this.startedStalkingAt;
+            
+            if(timeInactive >= this.inactivityTimeout && !oldTarget.isInactive)
             {
-                updateText += `<li class="stalkerMiscRed">Has gone offline</li>`;
+                newTarget.isInactive = true;
+                newTarget.inactiveAt = newStats.last_action_timestamp;
+                newTarget.updatedInactivityAt = parseInt(Date.now()/1000);
             }
-            else if(oldStatValue == "Offline")
+            else if(timeInactive >= this.inactivityTimeout)
             {
-                let timeOffline = newStats.last_action_timestamp - oldStats.last_action_timestamp;
-                let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
-                let words = "";
-                
-                if(timeOffline > timeSinceLastUpdate)
+                newTarget.isInactive = true;
+                if(oldStats.last_action_timestamp != newStats.last_action_timestamp)
                 {
-                    words = " after being offline for " + Utils.formatTime(timeOffline, true);
+                    newTarget.inactiveAt = newStats.last_action_timestamp;
                 }
+                else
+                {
+                    newTarget.inactiveAt = oldTarget.inactiveAt;
+                }
+                newTarget.updatedInactivityAt = parseInt(Date.now()/1000);
+            }
+            else
+            {
+                newTarget.isInactive = false;
+                newTarget.inactiveAt = oldTarget.inactiveAt;
+                newTarget.updatedInactivityAt = oldTarget.updatedInactivityAt;
+            }
+            
+            if(newTarget.isInactive && !oldTarget.isInactive)
+            {
+                updateText += `<li class="stalkerMiscRed">Has been inactive for ${Utils.formatTime(timeInactive, true)}</li>`;
+            }
+            else if(!newTarget.isInactive && oldTarget.isInactive && this.startedStalkingAt < oldTarget.updatedInactivityAt)
+            {
+                timeInactive = parseInt(Date.now()/1000) - oldTarget.inactiveAt;
                 
-                updateText += `<li class="stalkerMiscGreen">Has come online${words}</li>`;
+                updateText += `<li class="stalkerMiscGreen">Became active after ${Utils.formatTime(timeInactive, true)} of inactivity</li>`;
             }
-        }
-        else if(statName == "last_action_timestamp")
-        {
-            let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
-            
-            if(difference >= 300 && difference > timeSinceLastUpdate)
+            else if(!newTarget.isInactive && oldTarget.isInactive)
             {
-                //updateText += `<li class="stalkerMiscGreen">Came back after idling for ${Utils.formatTime(difference, true)}</li>`;
-            }
-        }
-        else if(statName == "useractivity")
-        {
-            let timeSinceLastUpdate = newStats.timestamp - oldStats.timestamp;
-            
-            if(timeSinceLastUpdate < 3600)
-            {
-                //updateText += `<li class="stalkerMisc">Was active for ${Utils.formatTime(difference)} the past ???</li>`;
+                updateText += `<li class="stalkerMiscGreen">Became active after an unknown amount of inactivity</li>`;
             }
         }
         
         return updateText;
     }
     
-    handleEnergyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleEnergyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -839,6 +954,10 @@ class ActivityStalkerModule extends BaseModule
         else if(statName == "attacksassisted")
         {
             updateText += `<li class="stalkerAttackGreen">Assisted in ${difference} attack${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "arrestsmade")
+        {
+            updateText += `<li class="stalkerAttackGreen">Arrested ${difference} ${difference == 1 ? "person" : "people"}</li>`;
         }
         else if(statName == "defendswon")
         {
@@ -902,7 +1021,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleCrimeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleCrimeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -929,7 +1048,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleDrugEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleDrugEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -969,7 +1088,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleItemEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleItemEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1051,7 +1170,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleMoneyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleMoneyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1135,7 +1254,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handlePointEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handlePointEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1163,7 +1282,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleMessageEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleMessageEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1186,14 +1305,29 @@ class ActivityStalkerModule extends BaseModule
                 difference -= newStats["spousemailssent"] - oldStats["spousemailssent"];
             }
             
+            let word = "to";
+            
+            if(statName == "factionmailssent" || statName == "companymailssent")
+            {
+                word = "within";
+            }
+            
             if(difference > 0)
             {
-                updateText += `<li class="stalkerMessage">Sent ${difference} mail${difference == 1 ? "" : "s"} to ${mailReceivers[statName]}</li>`;
+                updateText += `<li class="stalkerMessage">Sent ${difference} mail${difference == 1 ? "" : "s"} ${word} ${mailReceivers[statName]}</li>`;
             }
         }
         else if(statName == "forum_posts")
         {
             updateText += `<li class="stalkerMessage">Made ${difference} post${difference == 1 ? "" : "s"} on the forum</li>`;
+        }
+        else if(statName == "personalsplaced")
+        {
+            updateText += `<li class="stalkerMessage">Placed ${difference} personal ad${difference == 1 ? "" : "s"} in the Torn City Times</li>`;
+        }
+        else if(statName == "classifiedadsplaced")
+        {
+            updateText += `<li class="stalkerMessage">Placed ${difference} classified ad${difference == 1 ? "" : "s"} in the Torn City Times</li>`;
         }
         else if(statName == "karma")
         {
@@ -1217,7 +1351,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleStatusEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleStatusEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1349,11 +1483,12 @@ class ActivityStalkerModule extends BaseModule
         else if(statName == "until")
         {
             let details = newStatus.details;
+            details = details ? newStatus.details[0].toLowerCase() + newStatus.details.slice(1) : "";
             if(details.slice(-1) == ".")
             {
                 details = details.slice(0, -1);
             }
-            if(details.slice(0, 3) == "Was")
+            if(details.slice(0, 3) == "was")
             {
                 details = details.slice(4);
             }
@@ -1413,7 +1548,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleFactionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleFactionEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1436,7 +1571,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleCompanyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleCompanyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1459,11 +1594,23 @@ class ActivityStalkerModule extends BaseModule
         {
             updateText += `<li class="stalkerJobGreen">Was trained by company director ${difference} time${difference == 1 ? "" : "s"}</li>`;
         }
+        else if(statName == "intelligence")
+        {
+            updateText += `<li class="stalkerJobGreen">Gained ${difference.toLocaleString()} intelligence</li>`;
+        }
+        else if(statName == "endurance")
+        {
+            updateText += `<li class="stalkerJobGreen">Gained ${difference.toLocaleString()} endurance</li>`;
+        }
+        else if(statName == "manuallabor")
+        {
+            updateText += `<li class="stalkerJobGreen">Gained ${difference.toLocaleString()} manual labor</li>`;
+        }
         
         return updateText;
     }
     
-    handleUpgradeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleUpgradeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1479,7 +1626,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handlePropertyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handlePropertyEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1496,7 +1643,7 @@ class ActivityStalkerModule extends BaseModule
         return updateText;
     }
     
-    handleMiscEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference)
+    handleMiscEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
     {
         let updateText = "";
         
@@ -1508,6 +1655,9 @@ class ActivityStalkerModule extends BaseModule
         else if(statName == "current")
         {
             let max = newStats["maximum"];
+            let revives = newStats["revivesreceived"] - oldStats["revivesreceived"];
+            let medsUsed = newStats["medicalitemsused"] - oldStats["medicalitemsused"];
+            
             let className;
             let word;
             
@@ -1522,7 +1672,10 @@ class ActivityStalkerModule extends BaseModule
                 word = "Lost";
             }
             
-            updateText += `<li class="${className}">${word} ${Math.abs(difference).toLocaleString()} life and now has ${newStatValue.toLocaleString()} / ${max.toLocaleString()}</li>`;
+            if(difference < 0 || (this.showNaturalLifeRegen || (revives+medsUsed) > 0))
+            {
+                updateText += `<li class="${className}">${word} ${Math.abs(difference).toLocaleString()} life and now has ${newStatValue.toLocaleString()} / ${max.toLocaleString()}</li>`;
+            }
         }
         else if(statName == "maximum")
         {
@@ -4674,6 +4827,7 @@ class SettingsModule extends BaseModule
             {
                 let classRef;
                 
+                if(name == "Activity_Stalker"){classRef = ActivityStalkerModule}
                 if(name == "Automatic_Dark_Mode"){classRef = AutomaticDarkModeModule}
                 if(name == "Bazaar_Sorter"){classRef = BazaarSorterModule}
                 if(name == "Chain_Targets"){classRef = ChainTargetsModule}
@@ -4728,6 +4882,31 @@ class SettingsModule extends BaseModule
                         }
                     }
                 }, 
+                Activity_Stalker:
+                {
+                    isActive: false, 
+                    needsApiKey: true, 
+                    description: `This simplifies the art of stalking to a one-click-action. A new button is added to every player's profile, click it and you'll start tracking everything there is to track about them.<br/><br/>
+                    As long as you stay on that page, it'll retrieve new information every 30 seconds and display any changes. If you <i>do</i> leave the page, most things will still be tracked and be shown the next time you visit. 
+                    Not all things however, as some events need the (close to) real-time data to trigger updates.<br/><br/>
+                    You also have the option of manually replacing the player ID in the URL with a comma-separated list of IDs, this allows you to track up to 5 people at once.`,
+                    settingsHidden: true, 
+                    settings: 
+                    {
+                        Hide_life_regen: 
+                        {
+                            value: "false",
+                            valueType: "boolean",
+                            description: "The log can get pretty full of life regen events, so here you can disable them if you want<br/><br/>Note that life regen from using medical items or being revived will still trigger regardless"
+                        }, 
+                        Inactivity_threshold: 
+                        {
+                            value: 30, 
+                            valueType: "number", 
+                            description: "How many minutes of inactivity it takes to become inactive (0 means this setting is off), an event will trigger when someone starts or stops being inactive"
+                        }
+                    }
+                },
                 Automatic_Dark_Mode:
                 {
                     isActive: false, 
@@ -5436,5 +5615,3 @@ class SettingsModule extends BaseModule
 }
 
 let settings = new SettingsModule();
-
-//let stalker = new ActivityStalkerModule();
