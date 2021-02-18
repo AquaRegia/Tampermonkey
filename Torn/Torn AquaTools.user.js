@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.1
+// @version      2.2.2
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1159,7 +1159,7 @@ class ActivityStalkerModule extends BaseModule
         }
         else if(statName == "organisedcrimes")
         {
-            updateText += `<li class="stalkerCrimeGreen">Was part of ${difference} successful OC${difference == 1 ? "" : "s"}</li>`;
+            updateText += `<li class="stalkerCrime">Was part of ${difference} organized crime${difference == 1 ? "" : "s"}</li>`;
         }
         
         return updateText;
