@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.1.0
+// @version      2.1.1
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -526,7 +526,7 @@ class ActivityStalkerModule extends BaseModule
         
         .stalkerRow
         {
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             padding: 4px;
             border: 1px solid #999;
             background-color: #222;
@@ -615,9 +615,9 @@ class ActivityStalkerModule extends BaseModule
         {
             position: absolute;
             width: 2px;
-            height: 10px;
+            height: 5px;
             background-color: #999;
-            bottom: -11px;
+            bottom: -6px;
         }
         
         `;
@@ -706,8 +706,7 @@ class ActivityStalkerModule extends BaseModule
                 allVisibleRows[i].innerHTML += "<div class='stalkerConnection' style='right: 139px;'></div>";
                 allVisibleRows[i].innerHTML += "<div class='stalkerConnection' style='right: 149px;'></div>";
                 
-                allVisibleRows[i].style.backgroundColor = "#292929";
-                allVisibleRows[i+1].style.backgroundColor = "#292929";
+                allVisibleRows[i].style.marginBottom = "5px";
             }
         }
     }
