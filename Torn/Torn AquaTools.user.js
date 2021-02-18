@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.0
+// @version      2.2.1
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -675,7 +675,7 @@ class ActivityStalkerModule extends BaseModule
                     <legend>Filters</legend>
                     <ul>
                         ${this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.player_id + "'>&nbsp;<label for='stalkerFilter-" + e.player_id + "'>" + e.name + "&nbsp;(<span class='stalkerCountdown-" + e.player_id + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("")}
-                    
+                        ${[0, 0, 0, 0, 0].slice(this.targets.length).map(() => "<li><input disabled type='checkbox'/>&nbsp;<label></label></li>").join("")}
                     <li><label for="stalkerSearch">Search:&nbsp;</label><span class="stalkerInputWrapper"><input type="text" id="stalkerSearch"/></span></li>
                     </ul>
                 </fieldset>
@@ -683,7 +683,7 @@ class ActivityStalkerModule extends BaseModule
                 <fieldset>
                     <legend>Send notification on</legend>
                     <ul>
-                        ${this.targets.concat([0]).map(e => "<li><input type='text' class='stalkerAlert'/></li>").join("")}
+                        ${[0, 0, 0, 0, 0, 0].map(() => "<li><input type='text' class='stalkerAlert'/></li>").join("")}
                     </ul>
                 </fieldset>
             </form>
