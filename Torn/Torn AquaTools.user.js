@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.2
+// @version      2.2.3
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -24,12 +24,8 @@ let GM_notification = function(config)
 {
     Notification.requestPermission().then(() => 
     {
-        let notification = new Notification(config.title, {body: config.body, image: config.image, tag: "AquaTools"});
-        
-        if(config.clickHandler)
-        {
-            notification.addEventListener("click", () => (notification.close() || config.clickHandler()));
-        }
+        let notification = new Notification(config.title, config);
+        notification.addEventListener("click", () => (notification.close() && config.clickHandler()));
     });
 }
 
@@ -668,6 +664,15 @@ class ActivityStalkerModule extends BaseModule
     
     addBody()
     {
+        let notificationStringObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_notificationStrings") || "{}");
+        let notificationStrings = ["","","","","",""];
+        let key = [...this.targetIDs].sort((a, b) => a - b).join();
+        
+        if(notificationStringObject.hasOwnProperty(key))
+        {
+            notificationStrings = notificationStringObject[key];
+        }
+
         let html = `
         <div id="stalkerInnerContainer">
             <form>
@@ -683,7 +688,7 @@ class ActivityStalkerModule extends BaseModule
                 <fieldset>
                     <legend>Send notification on</legend>
                     <ul>
-                        ${[0, 0, 0, 0, 0, 0].map(() => "<li><input type='text' class='stalkerAlert'/></li>").join("")}
+                        ${notificationStrings.map(e => "<li><input type='text' value='" + e + "'class='stalkerAlert'/></li>").join("")}
                     </ul>
                 </fieldset>
             </form>
@@ -706,11 +711,28 @@ class ActivityStalkerModule extends BaseModule
         {
             input.addEventListener("keyup", this.filterStalkerEvents.bind(this));
         });
+        
+        document.querySelectorAll("#stalkerInnerContainer .stalkerAlert").forEach(input => 
+        {
+            input.addEventListener("change", e => 
+            {
+                let key = [...this.targetIDs].sort((a, b) => a - b).join();
+                let list = Array.from(document.querySelectorAll("#stalkerInnerContainer .stalkerAlert")).map(e => e.value);
+                
+                let notificationStringObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_notificationStrings") || "{}");
+                notificationStringObject[key] = list;
+                
+                localStorage.setItem("AquaTools_ActivityStalker_notificationStrings", JSON.stringify(notificationStringObject));
+            });
+        });
     }
     
-    checkNotifications(ul, authorName, authorID)
+    checkNotifications(row, authorName, authorID)
     {
-        if(window.getComputedStyle(ul).display == "block")
+        let ul = row.querySelector(".stalkerText");
+        let time = row.querySelector(".stalkerTime").dataset.timestamp;
+        
+        if(row.style.display == "block")
         {
             let notificationTerms = Array.from(document.querySelectorAll(".stalkerAlert")).map(e => e.value).filter(e => e);
             
@@ -721,7 +743,9 @@ class ActivityStalkerModule extends BaseModule
                     GM_notification(
                     {
                         title: `Activity Stalker - ${authorName} [${authorID}]`,
-                        body: li.innerText
+                        body: li.innerText, 
+                        tag: time,
+                        requireInteraction: true
                     });
                 }
             }
@@ -852,7 +876,7 @@ class ActivityStalkerModule extends BaseModule
         let now = Date.now();
         let countdownSpan = document.querySelector(".stalkerCountdown-" + this.targets[index].player_id);
         
-        while(now > (this.targets[index].timestamp*1000 + 30000))
+        while(now > (this.targets[index].timestamp*1000 + 30200))
         {
             let targetUpdate;
             let updateText = "";
@@ -971,7 +995,7 @@ class ActivityStalkerModule extends BaseModule
                 
                 this.filterStalkerEvents();
                 
-                this.checkNotifications(document.querySelector(".stalkerText"), targetUpdate.name, targetUpdate.player_id);
+                this.checkNotifications(document.querySelector(".stalkerRow"), targetUpdate.name, targetUpdate.player_id);
             }
             
             targetUpdate.stalkerEvents = this.targets[index].stalkerEvents.slice(-100);
@@ -3333,6 +3357,7 @@ class CompanyEffectivenessModule extends BaseModule
                             {
                                 title: "Time to rehab!",
                                 body: `Your effectiveness (${employee.effectiveness.total}) or addiction (${employee.effectiveness.addiction || 0}) has reached its threshold!`,
+                                tag: "AquaTools_CompanyEffectivenessModule",
                                 clickHandler: () => document.location.href = "https://www.torn.com/travelagency.php", 
                                 image: "data:image/png;base64,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"
                             });
