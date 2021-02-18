@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.0.2
+// @version      2.0.3
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -575,10 +575,18 @@ class ActivityStalkerModule extends BaseModule
             font-weight: 600;
         }
         
-        #stalkerInnerContainer form input, #stalkerInnerContainer form label
+        #stalkerInnerContainer form input[type="checkbox"], #stalkerInnerContainer form label
         {
             cursor: pointer;
             vertical-align: middle;
+        }
+        
+        #stalkerInnerContainer form input[type="text"]
+        {
+            background-color: #333;
+            color: #aaa;
+            padding-left: 3px;
+            width: 80px;
         }
         
         #stalkerInnerContainer form li
@@ -637,6 +645,8 @@ class ActivityStalkerModule extends BaseModule
                     <legend>Filter</legend>
                     <ul>
                     ${this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.player_id + "'> <label for='stalkerFilter-" + e.player_id + "'>" + e.name + " (<span class='stalkerCountdown-" + e.player_id + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("")}
+                    
+                    <li><label for="stalkerSearch">Search:</label> <input type="text" id="stalkerSearch"/></li>
                     </ul>
                 </fieldset>
             </form>
@@ -650,24 +660,34 @@ class ActivityStalkerModule extends BaseModule
     
     addJs()
     {
-        document.querySelectorAll("#stalkerInnerContainer input").forEach(input => 
+        document.querySelectorAll("#stalkerInnerContainer input[type='checkbox']").forEach(input => 
         {
-            input.addEventListener("change", e => 
+            input.addEventListener("change", this.filterStalkerEvents);
+        });
+        
+        document.querySelectorAll("#stalkerInnerContainer input[type='text']").forEach(input => 
+        {
+            input.addEventListener("keyup", this.filterStalkerEvents);
+        });
+    }
+    
+    filterStalkerEvents()
+    {
+        let shouldShow = Array.from(document.querySelectorAll("#stalkerInnerContainer input:checked")).map(e => e.id.split("-")[1]);
+        let searchTerm = document.querySelector(".stalkerContainer #stalkerSearch").value.toLowerCase();
+        
+        document.querySelectorAll(".stalkerRow").forEach(row => 
+        {
+            let rowText = row.querySelector(".stalkerText").innerText;
+            
+            if(shouldShow.some(e => row.classList.contains(e)) && rowText.toLowerCase().includes(searchTerm))
             {
-                let shouldShow = Array.from(document.querySelectorAll("#stalkerInnerContainer input:checked")).map(e => e.id.split("-")[1]);
-                
-                document.querySelectorAll(".stalkerRow").forEach(row => 
-                {
-                    if(shouldShow.some(e => row.classList.contains(e)))
-                    {
-                        row.style.display = "block";
-                    }
-                    else
-                    {
-                        row.style.display = "none";
-                    }
-                });
-            });
+                row.style.display = "block";
+            }
+            else
+            {
+                row.style.display = "none";
+            }
         });
     }
     
