@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.1.1
+// @version      2.1.2
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -683,7 +683,11 @@ class ActivityStalkerModule extends BaseModule
     
     addStalkerEventConnections()
     {
-        document.querySelectorAll(".stalkerConnection").forEach(e => e.remove());
+        document.querySelectorAll(".stalkerRow").forEach(e => 
+        {
+            e.querySelectorAll(".stalkerConnection").forEach(e => e.remove());
+            e.style.marginBottom = "15px";
+        });
         
         let allVisibleRows = Array.from(document.querySelectorAll(".stalkerRow[style*='display: block']"));
         
