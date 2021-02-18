@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.0.1
+// @version      2.0.2
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -4594,6 +4594,9 @@ class PowerLevelModule extends BaseModule
         powerLevel += data.xantaken * 250;
         breakdownString += "Xanax taken: +" + (data.xantaken * 250).toLocaleString() + "<br/>";
         
+        powerLevel += data.lsdtaken * 50;
+        breakdownString += "LSD taken: +" + (data.lsdtaken * 50).toLocaleString() + "<br/>";
+        
         powerLevel += data.boostersused * 100;
         breakdownString += "Boosters used: +" + (data.boostersused * 100).toLocaleString() + "<br/>";
         
@@ -4611,9 +4614,9 @@ class PowerLevelModule extends BaseModule
         powerLevel -= data.attacksdraw * 25;
         breakdownString += "Attacks: -" + ((data.attackswon + data.attackslost + data.attacksdraw) * 25).toLocaleString() + "<br/>";
         
-        powerLevel -= data.peoplebusted * 10;
-        powerLevel -= data.failedbusts * 10;
-        breakdownString += "Busts: -" + ((data.peoplebusted + data.failedbusts) * 10).toLocaleString() + "<br/>";
+        powerLevel -= data.peoplebusted * 8;
+        powerLevel -= data.failedbusts * 8;
+        breakdownString += "Busts: -" + ((data.peoplebusted + data.failedbusts) * 8).toLocaleString() + "<br/>";
         
         powerLevel -= data.revives * 75;
         breakdownString += "Revives: -" + (data.revives * 75).toLocaleString() + "<br/>";
