@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.0.3
+// @version      2.0.4
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -640,7 +640,7 @@ class ActivityStalkerModule extends BaseModule
     {
         let html = `
         <div id="stalkerInnerContainer">
-            <form style="display: ${this.targets.length == 1 ? "none" : "block"};">
+            <form>
                 <fieldset>
                     <legend>Filter</legend>
                     <ul>
