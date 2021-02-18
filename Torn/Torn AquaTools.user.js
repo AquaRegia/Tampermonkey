@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.0.4
+// @version      2.1.0
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -530,6 +530,7 @@ class ActivityStalkerModule extends BaseModule
             padding: 4px;
             border: 1px solid #999;
             background-color: #222;
+            position: relative;
         }
         
         .stalkerTimeContainer
@@ -610,6 +611,15 @@ class ActivityStalkerModule extends BaseModule
             background-color: #222;
         }
         
+        .stalkerConnection
+        {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background-color: #999;
+            bottom: -11px;
+        }
+        
         `;
         
         for(let [name, image] of Object.entries(this.images))
@@ -662,13 +672,44 @@ class ActivityStalkerModule extends BaseModule
     {
         document.querySelectorAll("#stalkerInnerContainer input[type='checkbox']").forEach(input => 
         {
-            input.addEventListener("change", this.filterStalkerEvents);
+            input.addEventListener("change", this.filterStalkerEvents.bind(this));
         });
         
         document.querySelectorAll("#stalkerInnerContainer input[type='text']").forEach(input => 
         {
-            input.addEventListener("keyup", this.filterStalkerEvents);
+            input.addEventListener("keyup", this.filterStalkerEvents.bind(this));
         });
+    }
+    
+    addStalkerEventConnections()
+    {
+        document.querySelectorAll(".stalkerConnection").forEach(e => e.remove());
+        
+        let allVisibleRows = Array.from(document.querySelectorAll(".stalkerRow[style*='display: block']"));
+        
+        for(let i = 0; i < allVisibleRows.length - 1; i++)
+        {
+            let thisTimeSpan = allVisibleRows[i].querySelector(".stalkerTime");
+            let thisID = allVisibleRows[i].classList[1];
+            let thisStart = new Date(thisTimeSpan.innerHTML.split(" - ")[0]);
+            let thisStop = new Date(thisTimeSpan.innerHTML.split(" - ")[1]);
+            
+            let nextTimeSpan = allVisibleRows[i+1].querySelector(".stalkerTime");
+            let nextID = allVisibleRows[i+1].classList[1];
+            let nextStart = new Date(nextTimeSpan.innerHTML.split(" - ")[0]);
+            let nextStop = new Date(nextTimeSpan.innerHTML.split(" - ")[1]);
+            
+            if(thisID != nextID && ((thisStart >= nextStart && thisStart <= nextStop) || (thisStop >= nextStart && thisStop <= nextStop)))
+            {
+                allVisibleRows[i].innerHTML += "<div class='stalkerConnection' style='left: 139px;'></div>";
+                allVisibleRows[i].innerHTML += "<div class='stalkerConnection' style='left: 149px;'></div>";
+                allVisibleRows[i].innerHTML += "<div class='stalkerConnection' style='right: 139px;'></div>";
+                allVisibleRows[i].innerHTML += "<div class='stalkerConnection' style='right: 149px;'></div>";
+                
+                allVisibleRows[i].style.backgroundColor = "#292929";
+                allVisibleRows[i+1].style.backgroundColor = "#292929";
+            }
+        }
     }
     
     filterStalkerEvents()
@@ -689,6 +730,8 @@ class ActivityStalkerModule extends BaseModule
                 row.style.display = "none";
             }
         });
+        
+        this.addStalkerEventConnections();
     }
     
     addStalkerEvents()
@@ -699,6 +742,8 @@ class ActivityStalkerModule extends BaseModule
         {
             history.innerHTML += event.outerHTML;
         }
+        
+        this.addStalkerEventConnections();
     }
     
     updateTimestamps()
@@ -876,6 +921,8 @@ class ActivityStalkerModule extends BaseModule
                 
                 this.targets[index].stalkerEvents.push({timestamp: now, outerHTML: div.outerHTML});
                 document.querySelector(".stalkerHistory").prepend(div);
+                
+                this.addStalkerEventConnections();
             }
             
             targetUpdate.stalkerEvents = this.targets[index].stalkerEvents.slice(-100);
