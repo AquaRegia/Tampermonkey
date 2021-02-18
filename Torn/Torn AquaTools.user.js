@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.1.2
+// @version      2.2.0
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -529,7 +529,7 @@ class ActivityStalkerModule extends BaseModule
             margin-bottom: 15px;
             padding: 4px;
             border: 1px solid #999;
-            background-color: #222;
+            background-color: #1e1e1e;
             position: relative;
         }
         
@@ -582,17 +582,35 @@ class ActivityStalkerModule extends BaseModule
             vertical-align: middle;
         }
         
+        #stalkerInnerContainer .stalkerInputWrapper
+        {
+            display: table-cell; 
+            width: 100%;
+        }
+        
         #stalkerInnerContainer form input[type="text"]
         {
             background-color: #333;
             color: #aaa;
-            padding-left: 3px;
-            width: 80px;
+            padding: 0 3px;
+            box-sizing: border-box;
+            width: 100%;
         }
         
         #stalkerInnerContainer form li
         {
             margin-bottom: 3px;
+            height: 14px;
+            width: 100%;
+            display: table;
+        }
+        
+        #stalkerInnerContainer form
+        {
+            display: inline-block;
+            box-sizing: border-box;
+            width: 50%;
+            margin: 0;
         }
         
         #stalkerInnerContainer fieldset
@@ -601,14 +619,16 @@ class ActivityStalkerModule extends BaseModule
             display: inline-block;
             border: 1px solid #999;
             padding: 4px 6px 2px;
-            background-color: #222;
+            background-color: #1e1e1e;
+            box-sizing: border-box;
+            width: 100%;
         }
         
         #stalkerInnerContainer legend
         {
             margin: 0 auto;
             padding: 6px 6px 0;
-            background-color: #222;
+            background-color: #1e1e1e;
         }
         
         .stalkerConnection
@@ -652,11 +672,18 @@ class ActivityStalkerModule extends BaseModule
         <div id="stalkerInnerContainer">
             <form>
                 <fieldset>
-                    <legend>Filter</legend>
+                    <legend>Filters</legend>
                     <ul>
-                    ${this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.player_id + "'> <label for='stalkerFilter-" + e.player_id + "'>" + e.name + " (<span class='stalkerCountdown-" + e.player_id + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("")}
+                        ${this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.player_id + "'>&nbsp;<label for='stalkerFilter-" + e.player_id + "'>" + e.name + "&nbsp;(<span class='stalkerCountdown-" + e.player_id + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("")}
                     
-                    <li><label for="stalkerSearch">Search:</label> <input type="text" id="stalkerSearch"/></li>
+                    <li><label for="stalkerSearch">Search:&nbsp;</label><span class="stalkerInputWrapper"><input type="text" id="stalkerSearch"/></span></li>
+                    </ul>
+                </fieldset>
+            </form><form>
+                <fieldset>
+                    <legend>Send notification on</legend>
+                    <ul>
+                        ${this.targets.concat([0]).map(e => "<li><input type='text' class='stalkerAlert'/></li>").join("")}
                     </ul>
                 </fieldset>
             </form>
@@ -675,10 +702,30 @@ class ActivityStalkerModule extends BaseModule
             input.addEventListener("change", this.filterStalkerEvents.bind(this));
         });
         
-        document.querySelectorAll("#stalkerInnerContainer input[type='text']").forEach(input => 
+        document.querySelectorAll("#stalkerInnerContainer #stalkerSearch").forEach(input => 
         {
             input.addEventListener("keyup", this.filterStalkerEvents.bind(this));
         });
+    }
+    
+    checkNotifications(ul, authorName, authorID)
+    {
+        if(window.getComputedStyle(ul).display == "block")
+        {
+            let notificationTerms = Array.from(document.querySelectorAll(".stalkerAlert")).map(e => e.value).filter(e => e);
+            
+            for(let li of ul.children)
+            {
+                if(notificationTerms.some(e => li.innerText.toLowerCase().includes(e.toLowerCase())))
+                {
+                    GM_notification(
+                    {
+                        title: `Activity Stalker - ${authorName} [${authorID}]`,
+                        body: li.innerText
+                    });
+                }
+            }
+        }
     }
     
     addStalkerEventConnections()
@@ -746,7 +793,7 @@ class ActivityStalkerModule extends BaseModule
             history.innerHTML += event.outerHTML;
         }
         
-        this.addStalkerEventConnections();
+        this.filterStalkerEvents();
     }
     
     updateTimestamps()
@@ -911,11 +958,8 @@ class ActivityStalkerModule extends BaseModule
                     
                 }).join("</li>");
                 
-                let display = Array.from(document.querySelectorAll("#stalkerInnerContainer input:checked")).map(e => e.id.split("-")[1]).includes(this.targetIDs[index]) ? "block" : "none";
-                
                 let div = document.createElement("div");
                 div.className = "stalkerRow " + targetUpdate.player_id;
-                div.style.display = display;
                 div.innerHTML = `
                     <div class="stalkerTimeContainer"><span class="stalkerLink"><a style="color: var(--default${targetUpdate.status.color ? "-" + targetUpdate.status.color : ""}-color) !important;" href="/profiles.php?XID=${this.targetIDs[index]}">${this.targets[index].name} [${this.targetIDs[index]}]</a></span><span class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.targets[index].timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</span></div>
                     <hr/>
@@ -925,7 +969,9 @@ class ActivityStalkerModule extends BaseModule
                 this.targets[index].stalkerEvents.push({timestamp: now, outerHTML: div.outerHTML});
                 document.querySelector(".stalkerHistory").prepend(div);
                 
-                this.addStalkerEventConnections();
+                this.filterStalkerEvents();
+                
+                this.checkNotifications(document.querySelector(".stalkerText"), targetUpdate.name, targetUpdate.player_id);
             }
             
             targetUpdate.stalkerEvents = this.targets[index].stalkerEvents.slice(-100);
