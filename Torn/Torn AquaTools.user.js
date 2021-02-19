@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.3
+// @version      2.2.4
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1067,6 +1067,10 @@ class ActivityStalkerModule extends BaseModule
             {
                 updateText += `<li class="stalkerMiscGreen">Became active after an unknown amount of inactivity</li>`;
             }
+        }
+        else if(statName == "territoryjoins")
+        {
+            updateText += `<li class="stalkerFactionGreen">Got up on ${difference} wall${difference == 1 ? "" : "s"}</li>`;
         }
         
         return updateText;
