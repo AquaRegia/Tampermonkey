@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.4
+// @version      2.2.5
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -4710,6 +4710,7 @@ class PowerLevelModule extends BaseModule
         let powerLevel = 0;
         
         let userActivityStart = new Date("2011-08-01").valueOf()/1000;
+        let nerveForBustingStart = new Date("2014-09-05").valueOf()/1000;
         let timePlayed;
         let timePlayedMultiplier = 1;
         
@@ -4759,9 +4760,12 @@ class PowerLevelModule extends BaseModule
         powerLevel -= data.attacksdraw * 25;
         breakdownString += "Attacks: -" + ((data.attackswon + data.attackslost + data.attacksdraw) * 25).toLocaleString() + "<br/>";
         
-        powerLevel -= data.peoplebusted * 8;
-        powerLevel -= data.failedbusts * 8;
-        breakdownString += "Busts: -" + ((data.peoplebusted + data.failedbusts) * 8).toLocaleString() + "<br/>";
+        if(json.user.signUp < nerveForBustingStart)
+        {
+            powerLevel -= data.peoplebusted * 10;
+            powerLevel -= data.failedbusts * 10;
+            breakdownString += "Busts: -" + ((data.peoplebusted + data.failedbusts) * 10).toLocaleString() + "<br/>";
+        }
         
         powerLevel -= data.revives * 75;
         breakdownString += "Revives: -" + (data.revives * 75).toLocaleString() + "<br/>";
