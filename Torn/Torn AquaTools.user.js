@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.5
+// @version      2.2.6
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -119,7 +119,7 @@ class AjaxModule
                 
                 result.addEventListener("readystatechange", function()
                 {
-                    if(this.readyState == 4 && ["", "text", "json"].includes(this.responseType) && this.responseText[0] == "{")
+                    if(this.readyState == 4 && ["", "text", "json"].includes(this.responseType) && this.responseText.trimLeft()[0] == "{")
                     {
                         let json = JSON.parse(this.responseText);
                         //console.log("XHR:", json);
@@ -203,13 +203,15 @@ class ApiModule
         
         this.loadCallLog();
         
-        if(this.callLog.length > 90)
+        while(this.callLog.length > 90)
         {
-            await Utils.sleep(7500);
+            await Utils.sleep(2000);
+            this.loadCallLog();
         }
-        else if(this.callLog.length > this.throttleLimit)
+        
+        if(this.callLog.length > this.throttleLimit)
         {
-            await Utils.sleep(1500);
+            await Utils.sleep(1000);
         }
         
         this.loadCallLog();
@@ -259,21 +261,6 @@ class ApiModule
     saveCacheLog()
     {
         localStorage.setItem("AquaTools_ApiModule_cache", JSON.stringify(this.cacheLog));
-    }
-    
-    updateLogs()
-    {
-        let now = Date.now();
-
-        this.callLog = this.callLog.filter(e => (e+60000) >= now);
-        
-        Object.entries(this.cacheLog).forEach(([index, item]) => 
-        {
-            if((item.time + 300000) < now)
-            {
-                delete this.cacheLog[index];
-            }
-        });
     }
     
     setApiParams(apiKey, throttleLimit)
@@ -419,14 +406,25 @@ class ActivityStalkerModule extends BaseModule
     
     async init()
     {
+        this.factionMode = document.location.href.includes("factions.php");
+        
         this.replaceContent("content-wrapper", async element =>
         {
             this.contentElement = element;
             this.contentElement.classList.add("stalkerContainer");
             
-            this.targetIDs = document.location.href.split("XID=")[1].split("&")[0].split(",").slice(0, 5);
             this.targets = [];
-            this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
+            
+            if(this.factionMode)
+            {
+                this.targetIDs = document.location.href.split("&ID=")[1].replace(/[^0-9,]+/g, "").split(",").slice(0, 5);
+                this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_factionTargets") || "{}");
+            }
+            else
+            {
+                this.targetIDs = document.location.href.split("XID=")[1].split("&")[0].split(",").slice(0, 5);
+                this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
+            }
             
             let targetsRemoved = 0;
             
@@ -438,7 +436,16 @@ class ActivityStalkerModule extends BaseModule
                 }
                 else
                 {
-                    let target = await this.api(`/user/${this.targetIDs[i]}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                    let target;
+                    
+                    if(this.factionMode)
+                    {
+                        target = await this.api(`/faction/${this.targetIDs[i]}?selections=basic,stats,timestamp`, 0);
+                    }
+                    else
+                    {
+                        target = await this.api(`/user/${this.targetsIDs[i]}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                    }
                     
                     if(target.error)
                     {
@@ -459,7 +466,14 @@ class ActivityStalkerModule extends BaseModule
             
             this.targetIDs = this.targetIDs.filter(e => e > 0);
             
-            localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
+            if(this.factionMode)
+            {
+                localStorage.setItem("AquaTools_ActivityStalker_factionTargets", JSON.stringify(this.targetsObject));
+            }
+            else
+            {
+                localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
+            }
             
             this.loadImageUrls();
             this.addStyle();
@@ -653,9 +667,20 @@ class ActivityStalkerModule extends BaseModule
     
     addHeader()
     {
+        let title;
+        
+        if(this.factionMode)
+        {
+            title = this.targets.map(e => "<a href='/factions.php?step=profile&ID=" + e.ID + "'>" + e.name + "</a>").join(", ");
+        }
+        else
+        {
+            title = this.targets.map(e => "<a href='/profiles.php?XID=" + e.player_id + "'>" + e.name + "</a>").join(", ");
+        }
+        
         this.contentElement.innerHTML = `
         <div class="content-title m-bottom10">
-            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Activity Stalker - <span style="font-size: 16px">${this.targets.map(e => "<a href='/profiles.php?XID=" + e.player_id + "'>" + e.name + "</a>").join(", ")}</span></h4>
+            <h4 id="skip-to-content" class="left" style="margin-right: 4px" >Activity Stalker - <span style="font-size: 16px">${title}</span></h4>
         <div class="clear"></div>
         <hr class="page-head-delimiter">
         </div>
@@ -673,13 +698,24 @@ class ActivityStalkerModule extends BaseModule
             notificationStrings = notificationStringObject[key];
         }
 
+        let lines;
+        
+        if(this.factionMode)
+        {
+            lines = this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.ID + "'>&nbsp;<label for='stalkerFilter-" + e.ID + "'>" + e.name + "&nbsp;(<span class='stalkerCountdown-" + e.ID + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("");
+        }
+        else
+        {
+            lines = this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.player_id + "'>&nbsp;<label for='stalkerFilter-" + e.player_id + "'>" + e.name + "&nbsp;(<span class='stalkerCountdown-" + e.player_id + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("");
+        }
+        
         let html = `
         <div id="stalkerInnerContainer">
             <form>
                 <fieldset>
                     <legend>Filters</legend>
                     <ul>
-                        ${this.targets.map(e => "<li><input checked type='checkbox'/ id='stalkerFilter-" + e.player_id + "'>&nbsp;<label for='stalkerFilter-" + e.player_id + "'>" + e.name + "&nbsp;(<span class='stalkerCountdown-" + e.player_id + "'>" + String(30 - (parseInt(Date.now()/1000) - e.timestamp)).padLeft(2, "0") + "</span>)</label></li>").join("")}
+                        ${lines}
                         ${[0, 0, 0, 0, 0].slice(this.targets.length).map(() => "<li><input disabled type='checkbox'/>&nbsp;<label></label></li>").join("")}
                     <li><label for="stalkerSearch">Search:&nbsp;</label><span class="stalkerInputWrapper"><input type="text" id="stalkerSearch"/></span></li>
                     </ul>
@@ -861,7 +897,8 @@ class ActivityStalkerModule extends BaseModule
             bounty: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="18" height="18" viewBox="0 0 18 18"><path data-name="Path 108-2" d="M9,0a9,9,0,1,0,9,9h0A9,9,0,0,0,9,0Zm7.5,8.25H15A6,6,0,0,0,9.83,3.07V1.57A7.59,7.59,0,0,1,16.5,8.25Zm-3.08,1.5a4.46,4.46,0,0,1-3.67,3.68V11.25H8.25v2.18A4.46,4.46,0,0,1,4.58,9.75H6.75V8.25H4.58A4.46,4.46,0,0,1,8.25,4.57V6.75h1.5V4.57a4.46,4.46,0,0,1,3.67,3.68H11.25v1.5ZM8.25,1.57v1.5A6,6,0,0,0,3.08,8.25H1.58A7.44,7.44,0,0,1,8.25,1.57ZM1.58,9.75h1.5a6,6,0,0,0,5.17,5.18v1.5A7.3,7.3,0,0,1,1.58,9.75ZM9.75,16.5V15a6,6,0,0,0,5.17-5.18h1.5A7.43,7.43,0,0,1,9.75,16.5Z"></path></svg>`,
             race: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="15.01" height="14" viewBox="0 0 15.01 14"><path data-name="Path 13-2" d="M14,11.5a7.83,7.83,0,0,0-1.21-9.25A7.38,7.38,0,0,0,2.38,2.07l-.18.18A7.73,7.73,0,0,0,0,7.69,7.78,7.78,0,0,0,2.37,13.3l.73.7,1.37-1.5-.73-.7a6.41,6.41,0,0,1-.64-.74l1.22-.73L3.67,9.19l-1.22.72a5.82,5.82,0,0,1,0-4.45l1.22.73L4.32,5,3.1,4.32A5.44,5.44,0,0,1,6.85,2.1V3.54H8.14V2.1A5.48,5.48,0,0,1,11.9,4.32l-1.22.73.65,1.14,1.22-.72a5.75,5.75,0,0,1-.28,5c-.06.1-.12.21-.19.31l-1.14-.88.49,3.5,3.41-.49L13.69,12Q13.87,11.77,14,11.5Zm-6.51-5A1.17,1.17,0,0,0,6.32,7.66,1.15,1.15,0,0,0,7.45,8.84,1.14,1.14,0,0,0,8.63,7.72v0l2-1.88L8,6.67a1.07,1.07,0,0,0-.52-.14Z"></path></svg>`,
             property: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="16" height="16" viewBox="0 1 16 16"><path d="M10.24,1C6.08,1,4.47,6,7.73,9.27c2.09,2.09,5.24,2.33,7,.52C17.81,6.75,14.78,1,10.24,1Zm3.28,7.52c-1.33,1.33-3.38.62-3.21-1.14a.64.64,0,0,0-.69-.69c-1.74.17-2.47-1.88-1.14-3.21s3.37-.6,3.21,1.14a.62.62,0,0,0,.68.69C14.11,5.15,14.85,7.19,13.52,8.52ZM5.65,13.23l1.41,1.41-.94.95-.94-.95-.47.47.94.95L4.71,17,3.3,15.58,1.88,17,0,15.11,5.93,9.18a7.58,7.58,0,0,0,.86,1,7.42,7.42,0,0,0,1,.85Z"></path></svg>`,
-            heart: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="transparent" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`
+            heart: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="#ffffff" stroke="transparent" stroke-width="1" stroke-linecap="square" stroke-linejoin="bevel"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`,
+            gym: `<svg xmlns="http://www.w3.org/2000/svg" class="default___25YWq " filter="" fill="#ffffff" stroke="transparent" stroke-width="0" width="20" height="9.9" viewBox="0 0 22 9.9"><path data-name="Union 19-2" d="M13.58,8.07V1.83A1.83,1.83,0,0,1,15.41,0h0a1.83,1.83,0,0,1,1.83,1.83h0V8.07A1.83,1.83,0,0,1,15.42,9.9h0A1.83,1.83,0,0,1,13.58,8.07Zm-10.83,0V1.83A1.83,1.83,0,0,1,4.58,0h0A1.83,1.83,0,0,1,6.42,1.83h0V8.07A1.83,1.83,0,0,1,4.58,9.9h0A1.83,1.83,0,0,1,2.75,8.07ZM18.17,2.7a.92.92,0,0,1,.91.92V6.28a.92.92,0,0,1-.91.92ZM.92,6.28v0A.92.92,0,0,1,0,5.38V4.52A.92.92,0,0,1,.92,3.6v0a.92.92,0,0,1,.91-.92V7.2a.92.92,0,0,1-.91-.92ZM19.08,3.6a.92.92,0,0,1,.92.92h0v.86a.92.92,0,0,1-.92.92ZM7.33,6.3V3.6h5.33V6.3Z"></path></svg>`
         }
         
         Object.entries(this.images).forEach(e => 
@@ -874,7 +911,16 @@ class ActivityStalkerModule extends BaseModule
     async stalk(index)
     {
         let now = Date.now();
-        let countdownSpan = document.querySelector(".stalkerCountdown-" + this.targets[index].player_id);
+        let countdownSpan;
+        
+        if(this.factionMode)
+        {
+            countdownSpan = document.querySelector(".stalkerCountdown-" + this.targets[index].ID);
+        }
+        else
+        {
+            countdownSpan = document.querySelector(".stalkerCountdown-" + this.targets[index].player_id);
+        }
         
         while(now > (this.targets[index].timestamp*1000 + 30200))
         {
@@ -883,7 +929,14 @@ class ActivityStalkerModule extends BaseModule
             
             try
             {
-                targetUpdate = await this.api(`/user/${this.targets[index].player_id}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                if(this.factionMode)
+                {
+                    targetUpdate = await this.api(`/faction/${this.targets[index].ID}?selections=basic,stats,timestamp`, 0);
+                }
+                else
+                {
+                    targetUpdate = await this.api(`/user/${this.targets[index].player_id}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                }
             }
             catch(e)
             {
@@ -897,7 +950,7 @@ class ActivityStalkerModule extends BaseModule
             }
             
             //For code 9, "API disabled"
-            if(!targetUpdate.personalstats)
+            if(targetUpdate.error)
             {
                 for(let i = 0; i < 29; i++)
                 {
@@ -908,28 +961,38 @@ class ActivityStalkerModule extends BaseModule
                 break;
             }
             
-            let modifiedFaction = {};
+            let oldStats = {};
+            let newStats = {};
+            let keys = [];
             
-            this.targets[index].faction["faction_position"] = this.targets[index].faction["position"];
-            targetUpdate.faction["faction_position"] = targetUpdate.faction["position"];
+            if(this.factionMode)
+            {
+                oldStats = {...this.targets[index].stats, ...this.targets[index]};
+                newStats = {...targetUpdate.stats, ...targetUpdate};
+            }
+            else
+            {
+                this.targets[index].faction["faction_position"] = this.targets[index].faction["position"];
+                targetUpdate.faction["faction_position"] = targetUpdate.faction["position"];
+                
+                this.targets[index].job["company_position"] = this.targets[index].job["position"];
+                targetUpdate.job["company_position"] = targetUpdate.job["position"];
+                
+                this.targets[index].last_action["last_action_timestamp"] = this.targets[index].last_action["timestamp"];
+                targetUpdate.last_action["last_action_timestamp"] = targetUpdate.last_action["timestamp"];
+                
+                this.targets[index].last_action["last_action_status"] = this.targets[index].last_action["status"];
+                targetUpdate.last_action["last_action_status"] = targetUpdate.last_action["status"];
+                
+                oldStats = {...this.targets[index].life, ...this.targets[index].company, ...this.targets[index].faction, ...this.targets[index].basicicons, ...this.targets[index].last_action, ...this.targets[index].criminalrecord, ...this.targets[index].personalstats, ...this.targets[index].status, ...this.targets[index]};
+                newStats = {...targetUpdate.life, ...this.targets[index].company, ...targetUpdate.faction, ...targetUpdate.basicicons, ...targetUpdate.last_action, ...targetUpdate.criminalrecord, ...targetUpdate.personalstats, ...targetUpdate.status, ...targetUpdate};
+            }
             
-            this.targets[index].job["company_position"] = this.targets[index].job["position"];
-            targetUpdate.job["company_position"] = targetUpdate.job["position"];
-            
-            this.targets[index].last_action["last_action_timestamp"] = this.targets[index].last_action["timestamp"];
-            targetUpdate.last_action["last_action_timestamp"] = targetUpdate.last_action["timestamp"];
-            
-            this.targets[index].last_action["last_action_status"] = this.targets[index].last_action["status"];
-            targetUpdate.last_action["last_action_status"] = targetUpdate.last_action["status"];
-            
-            let oldStats = {...this.targets[index].life, ...this.targets[index].company, ...this.targets[index].faction, ...this.targets[index].basicicons, ...this.targets[index].last_action, ...this.targets[index].criminalrecord, ...this.targets[index].personalstats, ...this.targets[index].status, ...this.targets[index]};
-            let newStats = {...targetUpdate.life, ...this.targets[index].company, ...targetUpdate.faction, ...targetUpdate.basicicons, ...targetUpdate.last_action, ...targetUpdate.criminalrecord, ...targetUpdate.personalstats, ...targetUpdate.status, ...targetUpdate};
-
-            let keys = Array.from(new Set(Object.keys(oldStats).concat(Object.keys(newStats))));
+            keys = Array.from(new Set(Object.keys(oldStats).concat(Object.keys(newStats))));
             
             let updateList = [];
             let doNotLog = ["ticktime", "timestamp", "isInactive", "inactiveAt", "relative", "fulltime", "updatedInactivityAt"];
-            
+
             for(let statName of keys)
             {
                 let oldStatValue = oldStats[statName];
@@ -944,19 +1007,27 @@ class ActivityStalkerModule extends BaseModule
                     
                     let params = [statName, oldStatValue, newStatValue, oldStats, newStats, newStatValue - oldStatValue, this.targets[index], targetUpdate];
                     
-                    updateText += this.handleActionEvents(...params);
-                    updateText += this.handleStatusEvents(...params);
-                    updateText += this.handleEnergyEvents(...params);
-                    updateText += this.handleCrimeEvents(...params);
-                    updateText += this.handleDrugEvents(...params);
-                    updateText += this.handleItemEvents(...params);
-                    updateText += this.handlePointEvents(...params);
-                    updateText += this.handleMessageEvents(...params);
-                    updateText += this.handleMoneyEvents(...params);
-                    updateText += this.handleMiscEvents(...params);
-                    updateText += this.handleFactionEvents(...params);
-                    updateText += this.handleCompanyEvents(...params);
-                    updateText += this.handlePropertyEvents(...params);
+                    if(this.factionMode)
+                    {
+                        updateText += this.handleFactionModeEvents(...params);
+                        updateText += this.handleItemEvents(...params);
+                    }
+                    else
+                    {
+                        updateText += this.handleActionEvents(...params);
+                        updateText += this.handleStatusEvents(...params);
+                        updateText += this.handleEnergyEvents(...params);
+                        updateText += this.handleCrimeEvents(...params);
+                        updateText += this.handleDrugEvents(...params);
+                        updateText += this.handleItemEvents(...params);
+                        updateText += this.handlePointEvents(...params);
+                        updateText += this.handleMessageEvents(...params);
+                        updateText += this.handleMoneyEvents(...params);
+                        updateText += this.handleMiscEvents(...params);
+                        updateText += this.handleFactionEvents(...params);
+                        updateText += this.handleCompanyEvents(...params);
+                        updateText += this.handlePropertyEvents(...params);
+                    }
                 }
             }
 
@@ -983,9 +1054,16 @@ class ActivityStalkerModule extends BaseModule
                 }).join("</li>");
                 
                 let div = document.createElement("div");
-                div.className = "stalkerRow " + targetUpdate.player_id;
+                
+                div.className = "stalkerRow";
+                div.className += " " + (this.factionMode ? targetUpdate.ID : targetUpdate.player_id);
+                
+                let color = this.factionMode ? "" : (targetUpdate.status.color ? "-" + targetUpdate.status.color : ""); 
+                let url = (this.factionMode ? "/factions.php?step=profile&ID=" : "/profiles.php?XID" + targetUpdate.ID) + this.targetIDs[index];
+                let name = this.factionMode ? this.targets[index].name : (this.targets[index].name + "[" + this.targetIDs[index] + "]");
+                
                 div.innerHTML = `
-                    <div class="stalkerTimeContainer"><span class="stalkerLink"><a style="color: var(--default${targetUpdate.status.color ? "-" + targetUpdate.status.color : ""}-color) !important;" href="/profiles.php?XID=${this.targetIDs[index]}">${this.targets[index].name} [${this.targetIDs[index]}]</a></span><span class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.targets[index].timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</span></div>
+                    <div class="stalkerTimeContainer"><span class="stalkerLink"><a style="color: var(--default${color}-color) !important;" href="${url}">${name}</a></span><span class="stalkerTime" data-timestamp="${targetUpdate.timestamp}">${Utils.stringifyTimestamp(this.targets[index].timestamp*1000)} - ${Utils.stringifyTimestamp(targetUpdate.timestamp*1000)}</span></div>
                     <hr/>
                     <ul class="stalkerText">${updateText}</ul>
                 `;
@@ -995,18 +1073,32 @@ class ActivityStalkerModule extends BaseModule
                 
                 this.filterStalkerEvents();
                 
-                this.checkNotifications(document.querySelector(".stalkerRow"), targetUpdate.name, targetUpdate.player_id);
+                this.checkNotifications(document.querySelector(".stalkerRow"), targetUpdate.name, this.factionMode ? targetUpdate.ID : targetUpdate.player_id);
             }
             
             targetUpdate.stalkerEvents = this.targets[index].stalkerEvents.slice(-100);
             
             this.targets[index] = targetUpdate;
             
-            this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
+            if(this.factionMode)
+            {
+                this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_factionTargets") || "{}");
+            }
+            else
+            {
+                this.targetsObject = JSON.parse(localStorage.getItem("AquaTools_ActivityStalker_targets") || "{}");
+            }
             
             this.targetsObject[this.targetIDs[index]] = this.targets[index];
             
-            localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
+            if(this.factionMode)
+            {
+                localStorage.setItem("AquaTools_ActivityStalker_factionTargets", JSON.stringify(this.targetsObject));
+            }
+            else
+            {
+                localStorage.setItem("AquaTools_ActivityStalker_targets", JSON.stringify(this.targetsObject));
+            }
             
             countdownSpan.innerHTML = 31;
             
@@ -1783,6 +1875,57 @@ class ActivityStalkerModule extends BaseModule
             let word = oldPropertyName == newPropertyName ? " another" : "";
             
             updateText += `<li class="stalkerProperty">Moved from ${oldPropertyName} to${word} ${newPropertyName}</li>`;
+        }
+        
+        return updateText;
+    }
+    
+    handleFactionModeEvents(statName, oldStatValue, newStatValue, oldStats, newStats, difference, oldTarget, newTarget)
+    {
+        let updateText = "";
+        
+        if(statName == "attacksleave")
+        {
+            updateText += `<li class="stalkerAttackGreen">Attacked and left ${difference} ${difference == 1 ? "person" : "people"} on the street</li>`;
+        }
+        else if(statName == "attackshosp")
+        {
+            updateText += `<li class="stalkerAttackGreen">Attacked and hospitalized ${difference} ${difference == 1 ? "person" : "people"}</li>`;
+        }
+        else if(statName == "attacksmug")
+        {
+            updateText += `<li class="stalkerAttackGreen">Attacked and mugged ${difference} ${difference == 1 ? "person" : "people"}</li>`;
+        }
+        else if(statName == "attacklost")
+        {
+            updateText += `<li class="stalkerAttackRed">Attacked and lost against ${difference} ${difference == 1 ? "person" : "people"}</li>`;
+        }
+        else if(statName == "attacksrunaway")
+        {
+            updateText += `<li class="stalkerAttackRed">Attacked and ran away ${difference} ${difference == 1 ? "person" : "people"}</li>`;
+        }
+        else if(statName == "revives")
+        {
+            updateText += `<li class="stalkerHospitalGreen">Received ${difference} revive${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "organisedcrimesuccess")
+        {
+            let respectDifference = newStats.organisedcrimerespect - oldStats.organisedcrimerespect;
+            let moneyDifference = newStats.organisedcrimemoney - oldStats.organisedcrimemoney;
+            
+            updateText += `<li class="stalkerCrimeGreen">Successfully completed ${difference} organized crime${difference == 1 ? "" : "s"} and gained a total of $${moneyDifference.toLocaleString()} and ${respectDifference.toLocaleString()} respect</li>`;
+        }
+        else if(statName == "organisedcrimefail")
+        {
+            updateText += `<li class="stalkerCrimeRed">Failed ${difference} organized crime${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(statName == "criminaloffences")
+        {
+            updateText += `<li class="stalkerCrimeGreen">Committed ${difference} crime${difference == 1 ? "" : "s"}</li>`;
+        }
+        else if(["gymstrength", "gymspeed", "gymdefense", "gymdexterity"].includes(statName))
+        {
+            updateText += `<li class="stalkerGymGreen">Spent ${difference.toLocaleString()} energy training ${statName.slice(3)}</li>`;
         }
         
         return updateText;
