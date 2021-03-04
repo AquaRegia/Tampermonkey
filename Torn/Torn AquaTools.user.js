@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.6
+// @version      2.2.7
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -3944,7 +3944,8 @@ class ListSorterModule extends BaseModule
             "friendlist.php": {},
             "blacklist.php": {},
             "companies.php": {},
-            "factions.php": {},
+            "factions.php": {}, 
+            "sid=attackLog": {}
         };
 
         this.sortMapper["friendlist.php"][".users-list-title > .title"] = 
@@ -4099,6 +4100,14 @@ class ListSorterModule extends BaseModule
             elementContainer: "div[class*='rowWrapper___']",
             elementValue: "div[class*='position___'] span", 
             valueType: "string"
+        };
+        
+        this.sortMapper["sid=attackLog"][".players-in-attack .participants-title"] = 
+        {
+            elementsToSortContainer: ".players-in-attack ul.participants-list", 
+            elementContainer: ".players-in-attack ul.participants-list li",
+            elementValue: ".desc .attack-damage", 
+            valueType: "number"
         };
         
         Object.values(this.sortMapper).forEach(e => Object.values(e).forEach(e => e.sortDescending = this.sortDescending));
