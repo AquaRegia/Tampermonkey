@@ -16,15 +16,15 @@ function tick()
 
     document.querySelectorAll(".members-list li.your").forEach(e =>
     {
-        let name = e.querySelector(".user.name span").innerText;
+        let id = e.querySelector(".user.name").href.split("XID=")[1];
 
-        wallPresence[name] = now;
+        wallPresence[id] = now;
     });
 
     document.querySelectorAll(".members-list li.table-row").forEach(e =>
     {
-        let name = e.querySelector(".user.name").innerText;
-        let seen = wallPresence[name] || 0;
+        let id = e.querySelector(".user.name").href.split("XID=")[1];
+        let seen = wallPresence[id] || 0;
 
         if((seen + 300000) < now)
         {
@@ -35,4 +35,3 @@ function tick()
     localStorage.wallPresence = JSON.stringify(wallPresence);
 }
 setInterval(tick, 200);
-
