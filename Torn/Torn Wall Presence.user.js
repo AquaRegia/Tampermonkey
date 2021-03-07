@@ -1,12 +1,15 @@
 // ==UserScript==
 // @name         Torn Wall Presence
 // @namespace    
-// @version      0.2
+// @version      0.3
 // @description  
 // @author       AquaRegia
 // @match        https://www.torn.com/factions.php?step=*
 // @grant        none
 // ==/UserScript==
+
+const ON_WALL_COLOR = "#f00";
+const OFF_WALL_COLOR = "#0f0";
 
 let wallPresence = JSON.parse(localStorage.wallPresence || "{}");
 
@@ -28,7 +31,11 @@ function tick()
 
         if((seen + 300000) < now)
         {
-            e.style.backgroundColor = "#300";
+            e.style.backgroundColor = OFF_WALL_COLOR;
+        }
+        else
+        {
+            e.style.backgroundColor = ON_WALL_COLOR;
         }
     });
 
