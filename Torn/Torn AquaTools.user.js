@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.7
+// @version      2.2.8
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -3729,19 +3729,20 @@ class EloCalculatorModule extends BaseModule
 
 class EntityFilterModule extends BaseModule
 {
-    constructor(crimeSelection, gymStatSelection)
+    constructor(crimeSelection, gymStatSelection, factionWallsToHide)
     {
         super("");
         
         this.location = document.location.href;
         this.crimeSelection = crimeSelection;
         this.gymStatSelection = gymStatSelection;
+        this.factionWallsToHide = factionWallsToHide;
         
         this.ready();
     }
     
     init()
-    {
+    {     
         if(this.location.includes("/crimes.php"))
         {
             this.hideCrimes();
@@ -3749,6 +3750,10 @@ class EntityFilterModule extends BaseModule
         else if(this.location.includes("/gym.php"))
         {
             this.hideGymStats();
+        }
+        else if(this.location.includes("/factions.php?step=your"))
+        {
+            this.hideWalls();
         }
     }
     
@@ -3839,6 +3844,26 @@ class EntityFilterModule extends BaseModule
                 }
             }
             `);
+        }
+    }
+    
+    hideWalls()
+    {
+        let idStrings = this.factionWallsToHide.replace(/[^0-9,]+/g, "");
+        
+        if(idStrings.length > 0)
+        {
+            this.addAjaxListener("step=getwardata", false, json => 
+            {
+                let ids = idStrings.split(",").map(e => parseInt(e));
+                
+                let hide = json.wars.slice(1).filter(e => ids.includes(e.enemyFaction.factionID));
+                let show = json.wars.slice(1).filter(e => !ids.includes(e.enemyFaction.factionID));
+                
+                json.wars = [json.wars[0]].concat(show);
+                
+                return json;
+            });
         }
     }
 }
@@ -5476,6 +5501,12 @@ class SettingsModule extends BaseModule
                             valueType: "list",
                             possibleValues: ["All", "None", "Strength", "Defense", "Speed", "Dexterity"],
                             description: "Hide all gym stats except this one"
+                        }, 
+                        Hide_walls:
+                        {
+                            value: "", 
+                            valueType: "text", 
+                            description: "This should be a comma-separated string of faction IDs whose walls you don't want to show on your own faction page"
                         }
                     }
                 },
