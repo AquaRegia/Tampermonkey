@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Wall Presence
 // @namespace    
-// @version      0.1
+// @version      0.2
 // @description  
 // @author       AquaRegia
 // @match        https://www.torn.com/factions.php?step=*
@@ -14,7 +14,7 @@ function tick()
 {
     let now = Date.now();
 
-    document.querySelectorAll(".members-list li.your").forEach(e =>
+    document.querySelectorAll(".members-list li.your, .members-list li.enemy").forEach(e =>
     {
         let id = e.querySelector(".user.name").href.split("XID=")[1];
 
