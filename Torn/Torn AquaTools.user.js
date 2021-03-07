@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.8
+// @version      2.2.9
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -1059,7 +1059,7 @@ class ActivityStalkerModule extends BaseModule
                 div.className += " " + (this.factionMode ? targetUpdate.ID : targetUpdate.player_id);
                 
                 let color = this.factionMode ? "" : (targetUpdate.status.color ? "-" + targetUpdate.status.color : ""); 
-                let url = (this.factionMode ? "/factions.php?step=profile&ID=" : "/profiles.php?XID" + targetUpdate.ID) + this.targetIDs[index];
+                let url = (this.factionMode ? "/factions.php?step=profile&ID=" : "/profiles.php?XID=") + this.targetIDs[index];
                 let name = this.factionMode ? this.targets[index].name : (this.targets[index].name + "[" + this.targetIDs[index] + "]");
                 
                 div.innerHTML = `
