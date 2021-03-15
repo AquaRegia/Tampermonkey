@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.9
+// @version      2.2.10
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -444,7 +444,7 @@ class ActivityStalkerModule extends BaseModule
                     }
                     else
                     {
-                        target = await this.api(`/user/${this.targetsIDs[i]}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
+                        target = await this.api(`/user/${this.targetIDs[i]}?selections=profile,crimes,basic,personalstats,timestamp`, 0);
                     }
                     
                     if(target.error)
