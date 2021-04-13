@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.2.10
+// @version      2.3.0
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -2089,7 +2089,7 @@ class AutomaticDarkModeModule extends BaseModule
     
     init()
     {
-        let cssDefaultValues = ["--default-color: #333333;", "--default-blue-color: #006699;", "--default-blue-hover-color: #999999;", "--default-green-color: #678c00;", "--default-text-shadow: 1px 1px 2px rgba(0, 0, 0, 1);", "--default-green-dark-color: #99CC00;", "--default-blue-dark-color: #00A9F9;", "--default-white-color: #ffffff;", "--default-red-color: #D83500;", "--default-gray-f2-color: #F2F2F2;", "--default-gray-3-color: #333333;", "--default-gray-4-color: #444444;", "--default-gray-5-color: #555555;", "--default-gray-6-color: #666666;", "--default-gray-7-color: #777777;", "--default-gray-8-color: #888888;", "--default-gray-9-color: #999999;", "--default-gray-c-color: #CCCCCC;", "--default-gray-9-hover-color: #999999;", "--default-bg-red-color: rgba(228, 74, 27, 0.15);", "--default-bg-gray-color: rgba(221, 221, 221, 0.15);", "--default-bg-blue-color: rgba(105, 170, 190, 0.15);", "--default-bg-green-color: rgba(110, 160, 55, 0.15);", "--default-bg-red-hover-color: rgba(229, 76, 26, 0.3);", "--default-bg-blue-hover-color: rgba(102, 168, 190, 0.3);", "--default-bg-green-hover-color: rgba(109, 163, 54, 0.3);", "--default-bg-1-gradient: linear-gradient(to bottom, #4c6600 0%, #74e800 100%);", "--default-bg-2-gradient: linear-gradient(to bottom, #b20000 0%, #ff2626 100%);", "--default-bg-3-gradient: linear-gradient(to bottom, #b28500 0%, #ffc926 100%);", "--default-bg-4-gradient: linear-gradient(to bottom, #005b5b 0%, #00d9d9 100%);", "--default-bg-5-gradient: linear-gradient(to bottom, #003366 0%, #0080ff 100%);", "--default-bg-6-gradient: linear-gradient(to bottom, #46008c 0%, #9933ff 100%);", "--default-bg-7-gradient: linear-gradient(to bottom, #660066 0%, #ff26ff 100%);", "--default-bg-8-gradient: linear-gradient(to bottom, #000000 0%, #555555 100%);", "--default-bg-9-gradient: linear-gradient(to bottom, #f28d8d 0%, #fad3d3 100%);", "--default-bg-10-gradient: linear-gradient(to bottom, #e1c919 0%, #f4df9f 100%);", "--default-bg-11-gradient: linear-gradient(to bottom, #a0cf17 0%, #e0f3a3 100%);", "--default-bg-12-gradient: linear-gradient(to bottom, #18d9d9 0%, #b7f6f6 100%);", "--default-bg-13-gradient: linear-gradient(to bottom, #6fafee 0%, #c9e0f9 100%);", "--default-bg-14-gradient: linear-gradient(to bottom, #b072ef 0%, #e2cbf9 100%);", "--default-bg-15-gradient: linear-gradient(to bottom, #f080f0 0%, #fad3fa 100%);", "--default-bg-16-gradient: linear-gradient(to bottom, #616161 0%, #bbbbbb 100%);", "--default-bg-17-gradient: linear-gradient(to bottom, #400000 0%, #b20000 100%);", "--default-bg-18-gradient: linear-gradient(to bottom, #403000 0%,#cc9900 100%);", "--default-bg-19-gradient: linear-gradient(to bottom, #204000 0%, #4e9b00 100%);", "--default-bg-20-gradient: linear-gradient(to bottom, #003040 0%, #009d9d 100%);", "--default-bg-21-gradient: linear-gradient(to bottom, #000040 0%, #0000b7 100%);", "--default-bg-22-gradient: linear-gradient(to bottom, #400040 0%, #8c008c 100%);", "--default-panel-gradient: linear-gradient(180deg, #ffffff 0%, #dddddd 100%);", "--default-panel-active-gradient: linear-gradient(0deg, #ffffff 0%, #dddddd 100%);", "--default-content-title-color: #333333;", "--title-msg-gray-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--title-msg-red-gradient: repeating-linear-gradient(90deg, #b73d14, #b73d14 2px, #bd4c26 0, #bd4c26 4px);", "--title-msg-green-gradient: repeating-linear-gradient(90deg, #627e0d, #627e0d 2px, #6e8820 0, #6e8820 4px);", "--title-msg-blue-gradient: repeating-linear-gradient(90deg, #6798b1, #6798b1 2px, #73a1b7 0, #73a1b7 4px);", "--info-msg-green-gradient: linear-gradient(to bottom, #9ce085 0%, #55ae2b 100%);", "--info-msg-red-gradient: linear-gradient(to bottom, #e7b99a 0%, #d26946 100%);", "--info-msg-blue-gradient: linear-gradient(to bottom, #bbe1ee 0%, #6ca6c1 100%);", "--info-msg-grey-gradient: linear-gradient(to bottom, #cccccc 0%, #999999 100%);", "--info-msg-horizontal-gradient: repeating-linear-gradient(to right, transparent 0px, transparent 2px, #ffffff2b 2px, #ffffff2b 4px);", "--zoom-tooltip-bg-color: #cccccc;", "--zoom-tooltip-font-color: #79796a;", "--pagination-bg-gradient: linear-gradient(to bottom, #fefefe, #e1e0e1);", "--pagination-active-page-bg-gradient: linear-gradient(to bottom, #cccccc94, #fafafa 80%, #fafafa);", "--pagination-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);", "--pagination-arrow-color: #787878;", "--pagination-arrow-color-active: #333333;", "--info-msg-font-color: #666666;", "--info-msg-bg-gradient: linear-gradient(to bottom, #ffffff 0%, #e4e4e4 100%);", "--info-msg-delimiter-gradient: linear-gradient(to bottom, #ffffff 0%, #e4e4e4 100%);", "--tooltip-border-color: #ffffff;", "--tooltip-bg-color: #f2f2f2;", "--white-tooltip-box-shadow: 0 0 5px #999999;", "--white-tooltip-arrow-filter: drop-shadow(0px 1px 0px #fff) drop-shadow(0px 2px 1px #11111124);", "--default-bg-panel-color: #f2f2f2;", "--default-bg-panel-active-color: #ffffff;", "--default-content-panel-color: #666666;", "--default-panel-divider-outer-side-color: #cccccc;", "--default-panel-divider-inner-side-color: #ffffff;", "--panel-border-bottom-color: #ffffff;", "--panel-divider-outer-side-color: #dddddd;", "--panel-bg-color: #cccccc;", "--defalt-divider-short-linear-gradient: linear-gradient(0deg, #CCCCCC00 0%, #CCCCCC 50%, #CCCCCC00 100%);", "--defalt-divider-long-top-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(242, 242, 242, 0) 100%);", "--defalt-divider-long-bottom-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-top-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 1) 0%, rgba(242, 242, 242, 0) 100%);", "--divider-bottom-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 0) 0%, rgba(242, 242, 242, 1) 100%);", "--divider-left-linear-gradient: linear-gradient(to right, rgba(242, 242, 242, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-right-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(242, 242, 242, 1) 100%);", "--divider-gray-left-linear-gradient: linear-gradient(to right, rgba(232, 232, 232, 1) 0%, rgba(232, 232, 232, 0) 100%);", "--divider-gray-right-linear-gradient: linear-gradient(to right, rgba(232, 232, 232, 0) 0%, rgba(232, 232, 232, 1) 100%);", "--divider-gray-bottom-linear-gradient: linear-gradient(to bottom, rgba(232, 232, 232, 0) 0%, rgba(232, 232, 232, 1) 100%);", "--divider-white-left-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-white-right-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-white-bottom-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-white-top-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-dark-color: #cccccc;", "--divider-light-color: #ffffff;", "--page-background-color: #cccccc;", "--page-content-divider-top-color: #999999;", "--page-content-divider-bottom-color: #ebebeb;", "--page-header-divider-border-top: 1px solid #999999;", "--page-header-divider-border-bottom: 1px solid #EBEBEB;", "--content-title-links-hover: #333333;", "--main-bg: #CCCCCC url(/images/v2/main/bg_regular.jpg) left top repeat;", "--tutorial-outcome-icon-fill: #cfcfcf;", "--tutorial-outcome-icon-shadow: none;", "--tutorial-title-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--tutorial-title-shadow: 1px 1px 2px rgba(0, 0, 0, 0.65);", "--tutorial-title-color: #ffffff;", "--tutorial-title-content-color: #333333;", "--top-links-icon-svg-fill: #777777;", "--top-links-icon-svg-hover-fill: #333333;", "--btn-disabled-color: #777777;", "--btn-disabled-box-shadow: 0 1px 0 #FFFFFFA6;", "--btn-disabled-text-shadow: 0 -1px 0 #FFFFFF66;", "--btn-disabled-background: transparent linear-gradient(180deg, #999999 0%, #CCCCCC 100%) 0 0 no-repeat;", "--btn-orange-box-shadow: 0 1px 0 #FFFFFF1A;", "--btn-gold-disabled-background: transparent linear-gradient(180deg, #CECEBF 0%, #F0F0E1 100%) 0 0 no-repeat;", "--btn-gold-disabled-color: #9B9B8C;", "--btn-gold-disabled-text-shadow: 0 -1px 0 #FFFFFF73;", "--default-icon-filter: drop-shadow(0 1px 0 #ffffff);", "--icon-filter: drop-shadow(0 1px 0 #ffffff);", "--icon-hover-filter: var(--icon-filter);", "--icon-disabled-filter: var(--icon-filter);", "--icon-black-filter: drop-shadow(0 1px 1px #111111b5);", "--title-brown-gradient: repeating-linear-gradient(90deg, #8a4223, #8a4223 2px, #904b2d 0, #904b2d 4px);", "--title-black-gradient: repeating-linear-gradient(90deg, #242424, #242424 2px, #2e2e2e 0,#2e2e2e 4px);", "--title-gray-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--title-red-gradient: repeating-linear-gradient(90deg, #b73d14, #b73d14 2px, #bd4c26 0, #bd4c26 4px);", "--title-green-gradient: repeating-linear-gradient(90deg, #627e0d, #627e0d 2px, #6e8820 0, #6e8820 4px);", "--title-blue-gradient: repeating-linear-gradient(90deg, #6CA6C1, #6CA6C1 2px, #BBE1EE 0, #BBE1EE 4px);", "--title-text-shadow-color: #FFFFFF;", "--title-text-shadow: 0 1px 0 var(--title-text-shadow-color);", "--title-divider-indent-top: 0;", "--title-left-divider-black-gradient: var(--default-panel-divider-outer-side-color);", "--title-right-divider-black-gradient: var(--default-panel-divider-outer-side-color);", "--title-left-divider-red-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-red-gradient: var(--title-right-divider-black-gradient);", "--title-left-divider-green-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-green-gradient: var(--title-right-divider-black-gradient);", "--title-left-divider-blue-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-blue-gradient: var(--title-right-divider-black-gradient);", "--title-divider-top-color: transparent;", "--title-divider-bottom-color: transparent;", "--checkbox-hover-color: #333333;", "--checkbox-box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.75), 0 1px 0 0 rgba(255, 255, 255, 0.75);", "--checkbox-border-color: #666666;", "--checkbox-hover-bg-color: #666666;", "--items-plate-background: linear-gradient(0deg, #EBEBEB 0%, #DDDDDD 100%) 0 0 no-repeat;", "--items-plate-background-color: #E8E8E8;", "--items-plate-border: 1px solid;", "--items-plate-border-color: transparent transparent #FFFFFF transparent;", "--items-plate-box-shadow: inset 0 3px 4px #1111113B;", "--items-plate-button-gradient: linear-gradient(180deg, #FFFFFF 0%, #FFFFFFBF 100%) 0 0 no-repeat;", "--items-plate-button-border-color: #BBBBBB;", "--items-plate-button-group-color: #808080;", "--items-plate-equip-thumbnail-box-shadow: 0 0 5px #C4FF00;", "--items-plate-equip-thumbnail-border-color: #A9C08F;", "--items-plate-qty-color: #333333;", "--items-plate-qty-text-shadow: 0 -2px 1px #FFFFFF, 0 2px 1px #FFFFFF, 2px 0 1px #FFFFFF, -2px 0 1px #FFFFFF;", "--autocomplete-color: #333333;", "--autocomplete-hover-color: #333333;", "--autocomplete-options-color: #999999;", "--autocomplete-options-border-color: #cccccc;", "--autocomplete-options-background-color: #f2f2f2;", "--autocomplete-options-background-active-color: #FFFFFF;", "--autocomplete-options-active-color: #999999;", "--autocomplete-background-color: #ffffff;", "--autocomplete-background-hover-color: #e4e4e4;", "--autocomplete-box-shadow: 0 1px 2px 1px #cccccc;", "--autocomplete-border-color: #cccccc;", "--autocomplete-chosen-background-color: #E2ECD7;", "--input-color: #000000;", "--input-background-color: #ffffff;", "--input-border-color: #cccccc;", "--input-disabled-color: #cccccc;", "--input-disabled-background-color: #F2F2F2;", "--input-disabled-border-color: #cccccc;", "--input-hover-border-color: #999999;", "--input-focus-border-color: #1864AB80;", "--input-error-border-color: #FFA396;", "--input-hover-box-shadow: none;", "--input-focus-box-shadow: none;", "--input-error-box-shadow: none;", "--input-money-color: var(--input-color);", "--input-money-background-color: var(--input-background-color);", "--input-money-border-color: var(--input-border-color);", "--input-money-disabled-color: var(--input-disabled-color);", "--input-money-disabled-background-color: var(--input-disabled-background-color);", "--input-money-disabled-border-color: var(--input-disabled-border-color);", "--input-money-hover-border-color: var(--input-hover-border-color);", "--input-money-focus-border-color: var(--input-focus-border-color);", "--input-money-error-border-color: var(--input-error-border-color);", "--input-money-currency-background-color: #ffffff;", "--input-money-currency-gradient: linear-gradient(to bottom, #ffffff 0%,#dddddd 100%);", "--input-money-currency-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);", "--input-money-currency-color: #999999;", "--input-money-currency-hover-color: #666666;", "--input-money-currency-hover-gradient: linear-gradient(to bottom, #dddddd 0%, #ffffff 100%);", "--input-money-currency-hover-background-color: #dddddd;", "--default-tabs-bg-gradient: linear-gradient(180deg, #FFFFFF 0%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-active-bg-gradient: linear-gradient(180deg, #FFFFFF 0%, #EBEAEB 100%) 0 0 no-repeat;", "--default-tabs-box-shadow: 0 0 2px #00000040;", "--default-tabs-color: #999999;", "--default-tabs-active-color: #666666;", "--default-tabs-disabled-color: #cccccc;", "--default-tabs-text-shadow: 0 1px 0 #FFFFFFA6;", "--default-tabs-active-text-shadow: 0 1px 0 #FFFFFF;", "--default-tabs-disabled-text-shadow: 0 -1px 0 #FFFFFF;", "--default-tabs-divider-border-left-color: #cccccc;", "--default-tabs-divider-border-right-color: #cccccc;", "--default-tabs-divider-left-gradient: linear-gradient(180deg, #FFFFFF 0%, var(--default-panel-divider-outer-side-color) 50%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-divider-right-gradient: linear-gradient(180deg, #FFFFFF 0%, var(--default-panel-divider-inner-side-color) 50%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-divider-indent-top: 0;", "--default-tabs-icon-filter: drop-shadow(0 1px 0 #FFFFFF);", "--default-tabs-icon-disabled-filter: drop-shadow(0 -1px 0 #FFFFFF)"];
+        let cssDefaultValues = ["--default-color: #333333;", "--default-blue-color: #006699;", "--default-blue-hover-color: #999999;", "--default-green-color: #678c00;", "--default-text-shadow: 1px 1px 2px rgba(0, 0, 0, 1);", "--default-green-dark-color: #99CC00;", "--default-blue-dark-color: #00A9F9;", "--default-white-color: #ffffff;", "--default-red-color: #D83500;", "--default-gray-f2-color: #F2F2F2;", "--default-gray-3-color: #333333;", "--default-gray-4-color: #444444;", "--default-gray-5-color: #555555;", "--default-gray-6-color: #666666;", "--default-gray-7-color: #777777;", "--default-gray-8-color: #888888;", "--default-gray-9-color: #999999;", "--default-bg-panel-color: #CCCCCC;", "--default-gray-9-hover-color: #999999;", "--default-bg-red-color: rgba(228, 74, 27, 0.15);", "--default-bg-gray-color: rgba(221, 221, 221, 0.15);", "--default-bg-blue-color: rgba(105, 170, 190, 0.15);", "--default-bg-green-color: rgba(110, 160, 55, 0.15);", "--default-bg-red-hover-color: rgba(229, 76, 26, 0.3);", "--default-bg-blue-hover-color: rgba(102, 168, 190, 0.3);", "--default-bg-green-hover-color: rgba(109, 163, 54, 0.3);", "--default-bg-1-gradient: linear-gradient(to bottom, #4c6600 0%, #74e800 100%);", "--default-bg-2-gradient: linear-gradient(to bottom, #b20000 0%, #ff2626 100%);", "--default-bg-3-gradient: linear-gradient(to bottom, #b28500 0%, #ffc926 100%);", "--default-bg-4-gradient: linear-gradient(to bottom, #005b5b 0%, #00d9d9 100%);", "--default-bg-5-gradient: linear-gradient(to bottom, #003366 0%, #0080ff 100%);", "--default-bg-6-gradient: linear-gradient(to bottom, #46008c 0%, #9933ff 100%);", "--default-bg-7-gradient: linear-gradient(to bottom, #660066 0%, #ff26ff 100%);", "--default-bg-8-gradient: linear-gradient(to bottom, #000000 0%, #555555 100%);", "--default-bg-9-gradient: linear-gradient(to bottom, #f28d8d 0%, #fad3d3 100%);", "--default-bg-10-gradient: linear-gradient(to bottom, #e1c919 0%, #f4df9f 100%);", "--default-bg-11-gradient: linear-gradient(to bottom, #a0cf17 0%, #e0f3a3 100%);", "--default-bg-12-gradient: linear-gradient(to bottom, #18d9d9 0%, #b7f6f6 100%);", "--default-bg-13-gradient: linear-gradient(to bottom, #6fafee 0%, #c9e0f9 100%);", "--default-bg-14-gradient: linear-gradient(to bottom, #b072ef 0%, #e2cbf9 100%);", "--default-bg-15-gradient: linear-gradient(to bottom, #f080f0 0%, #fad3fa 100%);", "--default-bg-16-gradient: linear-gradient(to bottom, #616161 0%, #bbbbbb 100%);", "--default-bg-17-gradient: linear-gradient(to bottom, #400000 0%, #b20000 100%);", "--default-bg-18-gradient: linear-gradient(to bottom, #403000 0%,#cc9900 100%);", "--default-bg-19-gradient: linear-gradient(to bottom, #204000 0%, #4e9b00 100%);", "--default-bg-20-gradient: linear-gradient(to bottom, #003040 0%, #009d9d 100%);", "--default-bg-21-gradient: linear-gradient(to bottom, #000040 0%, #0000b7 100%);", "--default-bg-22-gradient: linear-gradient(to bottom, #400040 0%, #8c008c 100%);", "--default-panel-gradient: linear-gradient(180deg, #ffffff 0%, #dddddd 100%);", "--default-panel-active-gradient: linear-gradient(0deg, #ffffff 0%, #dddddd 100%);", "--default-content-title-color: #333333;", "--title-msg-gray-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--title-msg-red-gradient: repeating-linear-gradient(90deg, #b73d14, #b73d14 2px, #bd4c26 0, #bd4c26 4px);", "--title-msg-green-gradient: repeating-linear-gradient(90deg, #627e0d, #627e0d 2px, #6e8820 0, #6e8820 4px);", "--title-msg-blue-gradient: repeating-linear-gradient(90deg, #6798b1, #6798b1 2px, #73a1b7 0, #73a1b7 4px);", "--info-msg-green-gradient: linear-gradient(to bottom, #9ce085 0%, #55ae2b 100%);", "--info-msg-red-gradient: linear-gradient(to bottom, #e7b99a 0%, #d26946 100%);", "--info-msg-blue-gradient: linear-gradient(to bottom, #bbe1ee 0%, #6ca6c1 100%);", "--info-msg-grey-gradient: linear-gradient(to bottom, #cccccc 0%, #999999 100%);", "--info-msg-horizontal-gradient: repeating-linear-gradient(to right, transparent 0px, transparent 2px, #ffffff2b 2px, #ffffff2b 4px);", "--zoom-tooltip-bg-color: #cccccc;", "--zoom-tooltip-font-color: #79796a;", "--pagination-bg-gradient: linear-gradient(to bottom, #fefefe, #e1e0e1);", "--pagination-active-page-bg-gradient: linear-gradient(to bottom, #cccccc94, #fafafa 80%, #fafafa);", "--pagination-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);", "--pagination-arrow-color: #787878;", "--pagination-arrow-color-active: #333333;", "--info-msg-font-color: #666666;", "--info-msg-bg-gradient: linear-gradient(to bottom, #ffffff 0%, #e4e4e4 100%);", "--info-msg-delimiter-gradient: linear-gradient(to bottom, #ffffff 0%, #e4e4e4 100%);", "--tooltip-border-color: #ffffff;", "--tooltip-bg-color: #f2f2f2;", "--white-tooltip-box-shadow: 0 0 5px #999999;", "--white-tooltip-arrow-filter: drop-shadow(0px 1px 0px #fff) drop-shadow(0px 2px 1px #11111124);", "--default-bg-panel-color: #f2f2f2;", "--default-bg-panel-active-color: #ffffff;", "--default-content-panel-color: #666666;", "--default-panel-divider-outer-side-color: #cccccc;", "--default-panel-divider-inner-side-color: #ffffff;", "--panel-border-bottom-color: #ffffff;", "--panel-divider-outer-side-color: #dddddd;", "--panel-bg-color: #cccccc;", "--defalt-divider-short-linear-gradient: linear-gradient(0deg, #CCCCCC00 0%, #CCCCCC 50%, #CCCCCC00 100%);", "--defalt-divider-long-top-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(242, 242, 242, 0) 100%);", "--defalt-divider-long-bottom-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-top-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 1) 0%, rgba(242, 242, 242, 0) 100%);", "--divider-bottom-linear-gradient: linear-gradient(to bottom, rgba(242, 242, 242, 0) 0%, rgba(242, 242, 242, 1) 100%);", "--divider-left-linear-gradient: linear-gradient(to right, rgba(242, 242, 242, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-right-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(242, 242, 242, 1) 100%);", "--divider-gray-left-linear-gradient: linear-gradient(to right, rgba(232, 232, 232, 1) 0%, rgba(232, 232, 232, 0) 100%);", "--divider-gray-right-linear-gradient: linear-gradient(to right, rgba(232, 232, 232, 0) 0%, rgba(232, 232, 232, 1) 100%);", "--divider-gray-bottom-linear-gradient: linear-gradient(to bottom, rgba(232, 232, 232, 0) 0%, rgba(232, 232, 232, 1) 100%);", "--divider-white-left-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-white-right-linear-gradient: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-white-bottom-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);", "--divider-white-top-linear-gradient: linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0) 100%);", "--divider-dark-color: #cccccc;", "--divider-light-color: #ffffff;", "--page-background-color: #cccccc;", "--page-content-divider-top-color: #999999;", "--page-content-divider-bottom-color: #ebebeb;", "--page-header-divider-border-top: 1px solid #999999;", "--page-header-divider-border-bottom: 1px solid #EBEBEB;", "--content-title-links-hover: #333333;", "--main-bg: #CCCCCC url(/images/v2/main/bg_regular.jpg) left top repeat;", "--tutorial-outcome-icon-fill: #cfcfcf;", "--tutorial-outcome-icon-shadow: none;", "--tutorial-title-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--tutorial-title-shadow: 1px 1px 2px rgba(0, 0, 0, 0.65);", "--tutorial-title-color: #ffffff;", "--tutorial-title-content-color: #333333;", "--top-links-icon-svg-fill: #777777;", "--top-links-icon-svg-hover-fill: #333333;", "--btn-disabled-color: #777777;", "--btn-disabled-box-shadow: 0 1px 0 #FFFFFFA6;", "--btn-disabled-text-shadow: 0 -1px 0 #FFFFFF66;", "--btn-disabled-background: transparent linear-gradient(180deg, #999999 0%, #CCCCCC 100%) 0 0 no-repeat;", "--btn-orange-box-shadow: 0 1px 0 #FFFFFF1A;", "--btn-gold-disabled-background: transparent linear-gradient(180deg, #CECEBF 0%, #F0F0E1 100%) 0 0 no-repeat;", "--btn-gold-disabled-color: #9B9B8C;", "--btn-gold-disabled-text-shadow: 0 -1px 0 #FFFFFF73;", "--default-icon-filter: drop-shadow(0 1px 0 #ffffff);", "--icon-filter: drop-shadow(0 1px 0 #ffffff);", "--icon-hover-filter: var(--icon-filter);", "--icon-disabled-filter: var(--icon-filter);", "--icon-black-filter: drop-shadow(0 1px 1px #111111b5);", "--title-brown-gradient: repeating-linear-gradient(90deg, #8a4223, #8a4223 2px, #904b2d 0, #904b2d 4px);", "--title-black-gradient: repeating-linear-gradient(90deg, #242424, #242424 2px, #2e2e2e 0,#2e2e2e 4px);", "--title-gray-gradient: repeating-linear-gradient(90deg, #666666, #666666 2px, #6d6d6d 0, #6d6d6d 4px);", "--title-red-gradient: repeating-linear-gradient(90deg, #b73d14, #b73d14 2px, #bd4c26 0, #bd4c26 4px);", "--title-green-gradient: repeating-linear-gradient(90deg, #627e0d, #627e0d 2px, #6e8820 0, #6e8820 4px);", "--title-blue-gradient: repeating-linear-gradient(90deg, #6CA6C1, #6CA6C1 2px, #BBE1EE 0, #BBE1EE 4px);", "--title-text-shadow-color: #FFFFFF;", "--title-text-shadow: 0 1px 0 var(--title-text-shadow-color);", "--title-divider-indent-top: 0;", "--title-left-divider-black-gradient: var(--default-panel-divider-outer-side-color);", "--title-right-divider-black-gradient: var(--default-panel-divider-outer-side-color);", "--title-left-divider-red-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-red-gradient: var(--title-right-divider-black-gradient);", "--title-left-divider-green-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-green-gradient: var(--title-right-divider-black-gradient);", "--title-left-divider-blue-gradient: var(--title-left-divider-black-gradient);", "--title-right-divider-blue-gradient: var(--title-right-divider-black-gradient);", "--title-divider-top-color: transparent;", "--title-divider-bottom-color: transparent;", "--checkbox-hover-color: #333333;", "--checkbox-box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.75), 0 1px 0 0 rgba(255, 255, 255, 0.75);", "--checkbox-border-color: #666666;", "--checkbox-hover-bg-color: #666666;", "--items-plate-background: linear-gradient(0deg, #EBEBEB 0%, #DDDDDD 100%) 0 0 no-repeat;", "--items-plate-background-color: #E8E8E8;", "--items-plate-border: 1px solid;", "--items-plate-border-color: transparent transparent #FFFFFF transparent;", "--items-plate-box-shadow: inset 0 3px 4px #1111113B;", "--items-plate-button-gradient: linear-gradient(180deg, #FFFFFF 0%, #FFFFFFBF 100%) 0 0 no-repeat;", "--items-plate-button-border-color: #BBBBBB;", "--items-plate-button-group-color: #808080;", "--items-plate-equip-thumbnail-box-shadow: 0 0 5px #C4FF00;", "--items-plate-equip-thumbnail-border-color: #A9C08F;", "--items-plate-qty-color: #333333;", "--items-plate-qty-text-shadow: 0 -2px 1px #FFFFFF, 0 2px 1px #FFFFFF, 2px 0 1px #FFFFFF, -2px 0 1px #FFFFFF;", "--autocomplete-color: #333333;", "--autocomplete-hover-color: #333333;", "--autocomplete-options-color: #999999;", "--autocomplete-options-border-color: #cccccc;", "--autocomplete-options-background-color: #f2f2f2;", "--autocomplete-options-background-active-color: #FFFFFF;", "--autocomplete-options-active-color: #999999;", "--autocomplete-background-color: #ffffff;", "--autocomplete-background-hover-color: #e4e4e4;", "--autocomplete-box-shadow: 0 1px 2px 1px #cccccc;", "--autocomplete-border-color: #cccccc;", "--autocomplete-chosen-background-color: #E2ECD7;", "--input-color: #000000;", "--input-background-color: #ffffff;", "--input-border-color: #cccccc;", "--input-disabled-color: #cccccc;", "--input-disabled-background-color: #F2F2F2;", "--input-disabled-border-color: #cccccc;", "--input-hover-border-color: #999999;", "--input-focus-border-color: #1864AB80;", "--input-error-border-color: #FFA396;", "--input-hover-box-shadow: none;", "--input-focus-box-shadow: none;", "--input-error-box-shadow: none;", "--input-money-color: var(--input-color);", "--input-money-background-color: var(--input-background-color);", "--input-money-border-color: var(--input-border-color);", "--input-money-disabled-color: var(--input-disabled-color);", "--input-money-disabled-background-color: var(--input-disabled-background-color);", "--input-money-disabled-border-color: var(--input-disabled-border-color);", "--input-money-hover-border-color: var(--input-hover-border-color);", "--input-money-focus-border-color: var(--input-focus-border-color);", "--input-money-error-border-color: var(--input-error-border-color);", "--input-money-currency-background-color: #ffffff;", "--input-money-currency-gradient: linear-gradient(to bottom, #ffffff 0%,#dddddd 100%);", "--input-money-currency-text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);", "--input-money-currency-color: #999999;", "--input-money-currency-hover-color: #666666;", "--input-money-currency-hover-gradient: linear-gradient(to bottom, #dddddd 0%, #ffffff 100%);", "--input-money-currency-hover-background-color: #dddddd;", "--default-tabs-bg-gradient: linear-gradient(180deg, #FFFFFF 0%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-active-bg-gradient: linear-gradient(180deg, #FFFFFF 0%, #EBEAEB 100%) 0 0 no-repeat;", "--default-tabs-box-shadow: 0 0 2px #00000040;", "--default-tabs-color: #999999;", "--default-tabs-active-color: #666666;", "--default-tabs-disabled-color: #cccccc;", "--default-tabs-text-shadow: 0 1px 0 #FFFFFFA6;", "--default-tabs-active-text-shadow: 0 1px 0 #FFFFFF;", "--default-tabs-disabled-text-shadow: 0 -1px 0 #FFFFFF;", "--default-tabs-divider-border-left-color: #cccccc;", "--default-tabs-divider-border-right-color: #cccccc;", "--default-tabs-divider-left-gradient: linear-gradient(180deg, #FFFFFF 0%, var(--default-panel-divider-outer-side-color) 50%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-divider-right-gradient: linear-gradient(180deg, #FFFFFF 0%, var(--default-panel-divider-inner-side-color) 50%, #DDDDDD 100%) 0 0 no-repeat;", "--default-tabs-divider-indent-top: 0;", "--default-tabs-icon-filter: drop-shadow(0 1px 0 #FFFFFF);", "--default-tabs-icon-disabled-filter: drop-shadow(0 -1px 0 #FFFFFF)"];
         let cssResult = "";
 
         for(let cssString of cssDefaultValues)
@@ -2781,7 +2781,7 @@ class ChainTargetsModule extends BaseModule
             .chainTargets tr:nth-child(2n), .chainTargets tr:nth-child(2n) td
             {
                 /*background-color: #DDD;*/
-                background-color: var(--default-gray-c-color);
+                background-color: var(--default-bg-panel-color);
             }
             
             .chainTargets table.chainTargetsTable caption
@@ -3175,7 +3175,7 @@ class CityFindsModule extends BaseModule
 
             for(let item of Object.values(entry.items))
             {
-                html += `<tr style="background-color: var(--default-gray-c-color)"><td>${item.name}</td><td style="text-align: center">${item.amount}</td><td class="cityFindItem-${item.id} cityFindTitle-${title}">Unknown</td></tr>`;
+                html += `<tr style="background-color: var(--default-bg-panel-color)"><td>${item.name}</td><td style="text-align: center">${item.amount}</td><td class="cityFindItem-${item.id} cityFindTitle-${title}">Unknown</td></tr>`;
             }
 
             if(this.itemGrouping != "None" && this.itemGrouping != "Name")
@@ -4981,6 +4981,292 @@ class PowerLevelModule extends BaseModule
     }
 }
 
+class StockMarketModule extends BaseModule
+{
+    constructor(groupBy, orderBy)
+    {
+        super("page.php?sid=stocks");
+        
+        this.groupByOwned = groupBy.toLowerCase().includes("owned");
+        this.groupByType = groupBy.toLowerCase().includes("type");
+        this.groupPriority = groupBy.toLowerCase().split(" ")[0];
+        this.sortByValue = orderBy.toLowerCase() != "None";
+        this.reverseSortOrder = orderBy.toLowerCase().includes("ascending");
+        
+        this.items = {
+            "Feathery Hotel Coupon": {id: 367, value: 0}, 
+            "Erotic DVD": {id: 366, value: 0},
+            "Drug Pack": {id: 370, value: 0}, 
+            "of Grenades": {id: 364, value: 0}, 
+            "Lawyer Business Card": {id: 368, value: 0}, 
+            "Lottery Voucher": {id: 369, value: 0}, 
+            "of Medical Supplies": {id: 365, value: 0}
+        };
+        
+        this.ready();
+    }
+    
+    init()
+    {
+        this.addAjaxListener("StockMarket&step=getInitialData", false, json => 
+        {
+            if(this.sortByValue)
+            {
+                let sorter = (a, b) => (b.dividends.requirements.forOne * b.sharesPrice.chartData.slice(-1)[0].value) - (a.dividends.requirements.forOne * a.sharesPrice.chartData.slice(-1)[0].value);
+                
+                json.stocks.sort(sorter);
+                
+                if(this.reverseSortOrder)
+                {
+                    json.stocks.reverse();
+                }
+            }
+            
+            let myStocks = json.stocks.filter(e => e.userOwned.sharesAmount > 0);
+            let otherStocks = json.stocks.filter(e => e.userOwned.sharesAmount == 0);
+            
+            let activeBenefits = json.stocks.filter(e => e.dividends.type == "active");
+            let passiveBenefits = json.stocks.filter(e => e.dividends.type == "passive");
+
+            let cashDividends = activeBenefits.filter(e => e.dividends.bonus.default.includes("$"));
+            let itemDividends = activeBenefits.filter(e => e.dividends.bonus.default.replace(/[0-9]/g, "").charAt(0) == "x");
+            let otherDividends = activeBenefits.filter(e => !cashDividends.includes(e) && !itemDividends.includes(e));
+            
+            let myCashDividends = cashDividends.filter(e => e.userOwned.sharesAmount > 0);
+            let otherCashDividends = cashDividends.filter(e => e.userOwned.sharesAmount == 0);
+            
+            let myItemDividends = itemDividends.filter(e => e.userOwned.sharesAmount > 0);
+            let otherItemDividends = itemDividends.filter(e => e.userOwned.sharesAmount == 0);
+            
+            let myOtherDividends = otherDividends.filter(e => e.userOwned.sharesAmount > 0);
+            let otherOtherDividends = otherDividends.filter(e => e.userOwned.sharesAmount == 0);
+            
+            let myPassiveBenefits = passiveBenefits.filter(e => e.userOwned.sharesAmount > 0);
+            let otherPassiveBenefits = passiveBenefits.filter(e => e.userOwned.sharesAmount == 0);
+            
+            let listOrder;
+            
+            if(this.groupByOwned && !this.groupByType)
+            {
+                listOrder = [[myStocks, ""], 
+                            [otherStocks, ""]];
+            }
+            else if(!this.groupByOwned && this.groupByType)
+            {
+                listOrder = [[cashDividends, "Cash dividends"], 
+                            [itemDividends, "Item dividends"], 
+                            [otherDividends, "Other dividends"], 
+                            [passiveBenefits, "Passive benefits"]];
+            }
+            else if(this.groupByOwned && this.groupByType)
+            {
+                if(this.groupPriority == "owned")
+                {
+                    listOrder = [[myCashDividends, "Cash dividends"], 
+                                [myItemDividends, "Item dividends"], 
+                                [myOtherDividends, "Other dividends"], 
+                                [myPassiveBenefits, "Passive benefits"], 
+                                [otherCashDividends, "Cash dividends"], 
+                                [otherItemDividends, "Item dividends"], 
+                                [otherOtherDividends, "Other dividends"], 
+                                [otherPassiveBenefits, "Passive benefits"]];
+                }
+                else if(this.groupPriority == "type")
+                {
+                    listOrder = [[myCashDividends, "Cash dividends"], 
+                                [otherCashDividends, ""], 
+                                [myItemDividends, "Item dividends"], 
+                                [otherItemDividends, ""], 
+                                [myOtherDividends, "Other dividends"], 
+                                [otherOtherDividends, ""], 
+                                [myPassiveBenefits, "Passive benefits"], 
+                                [otherPassiveBenefits, ""]];
+                }
+            }
+            
+            if(listOrder)
+            {
+                let index = 1;
+                let isFirst = true;
+                json.stocks = [];
+                
+                for(let [items, label] of listOrder)
+                {
+                    if(items.length > 0)
+                    {
+                        json.stocks = json.stocks.concat(items);
+                        
+                        GM_addStyle(`
+                        div[class*='stockMarket___'] > ul:nth-of-type(${index})
+                        {
+                            margin-top: ${label ? "25" : (isFirst ? "0" : "10")}px;
+                        }
+                        div[class*='stockMarket___'] > ul:nth-of-type(${index})::before
+                        {
+                            content: "${label}";
+                            position: absolute;
+                            top: -15px;
+                        }
+                        `);
+                        
+                        if(isFirst)
+                        {
+                            isFirst = false;
+                        }
+                        
+                        index += items.length;
+                    }
+                }
+                
+                this.addStyle();
+            }
+            
+            return json;
+        });
+        
+        this.hijackDividendTab();
+    }
+    
+    async getAverageItemCost(id)
+    {
+        let json = await this.api(`/market/${id}?selections=bazaar`, 300000);
+
+        let quantity = 0;
+        let sum = 0;
+
+        for(let bazaar of json.bazaar)
+        {
+            for(let i = 0; i < bazaar.quantity; i++)
+            {
+                quantity += 1;
+                sum += bazaar.cost;
+
+                if(quantity >= 10)
+                {
+                    break;
+                }
+            }
+
+            if(quantity >= 10)
+            {
+                break;
+            }
+        }
+
+        let result = parseInt(sum/quantity);
+
+        return result;
+    }
+    
+    addStyle()
+    {
+        GM_addStyle(`
+        div[class*='stockMarket___']
+        {
+            background-color: var(--main-bg);
+        }
+        
+        div[class*='stockMarket___'] > ul
+        {
+            background-color: var(--stockmarket-bg-color);
+            position: relative;
+        }
+        `);
+    }
+    
+    hijackDividendTab(lastPrice = 0)
+    {
+        let panel = document.querySelector("#panel-DividendTab > div");
+        let currentPrice = 0;
+        
+        if(panel)
+        {
+            let dividendInfo = document.querySelector("#dividendInfo");
+            currentPrice = parseFloat(panel.parentNode.previousElementSibling.querySelector("li[class*='stockPrice___']").querySelector("div[class*='price___']").innerText.replace(/[^0-9\.]+/g, ""));
+            let type = panel.querySelectorAll("span")[1].innerText;
+
+            if(!dividendInfo)
+            {
+                dividendInfo = document.createElement("p");
+                dividendInfo.id = "dividendInfo";
+                dividendInfo.style.lineHeight = "16px";
+
+                panel.appendChild(dividendInfo);
+            }
+            
+            if((type.includes("$") || Object.keys(this.items).some(e => type.includes(e))) && lastPrice != currentPrice)
+            {
+                this.updateDividendInfo(type);
+            }
+        }
+        
+        setTimeout(this.hijackDividendTab.bind(this, currentPrice), 200);
+    }
+    
+    async updateDividendInfo(type)
+    {
+        let panel = document.querySelector("#panel-DividendTab > div");
+        let dividendInfo = document.querySelector("#dividendInfo");
+        
+        let baseDividend = parseInt(panel.parentNode.previousElementSibling.querySelector("li[class*='stockDividend___']").querySelector("p[class*='dividend___']").innerText.replace(/[^0-9]+/g, ""));
+        let days = parseInt(panel.querySelectorAll("span")[2].innerText.replace(/[^0-9]+/g, ""));
+        
+        if(baseDividend < 500) //ugly hack, if you get less than 500 it's probably items, not money
+        {
+            for(let entry of Object.entries(this.items))
+            {
+                let key = entry[0];
+                let item = entry[1];
+                
+                if(type.includes(key))
+                {
+                    let itemValue = item.value || await this.getAverageItemCost(item.id);
+                    this.items[key].value = itemValue;
+                    
+                    baseDividend = itemValue;
+                }
+            }
+        }
+        
+        let baseShares = parseInt(panel.querySelectorAll("span")[3].innerText.replace(/[^0-9]+/g, ""));
+        let baseValue = parseInt(panel.querySelectorAll("span")[4].innerText.replace(/[^0-9]+/g, ""));
+        
+        let yourShares = parseInt(panel.parentNode.previousElementSibling.querySelector("li[class*='stockOwned___']").querySelector("p[class*='count___']").innerText.replace(/[^0-9]+/g, "")) || 0;
+        let yourValue = parseInt(panel.parentNode.previousElementSibling.querySelector("li[class*='stockOwned___']").querySelector("p[class*='value___']").innerText.replace(/[^0-9]+/g, "")) || 1;
+        let yourDividend = baseDividend * this.getBlockCount(baseShares, yourShares);
+        
+        let nextShares = parseInt(panel.querySelectorAll("span")[5].innerText.replace(/[^0-9]+/g, "")) + yourShares;
+        let nextValue = parseInt(panel.querySelectorAll("span")[6].innerText.replace(/[^0-9]+/g, "")) + yourValue;
+        let nextDividend = baseDividend * this.getBlockCount(baseShares, yourShares + nextShares);
+        
+        let base = (((baseDividend / days) * 365) / baseValue)*100;
+        let your = (((yourDividend / days) * 365) / yourValue)*100;
+        let next = (((nextDividend / days) * 365) / nextValue)*100;
+        
+        dividendInfo.innerHTML = "Base APR: " + base.toFixed(2) + "%<br/>";
+        dividendInfo.innerHTML += "Your APR: " + your.toFixed(2) + "%<br/>";
+        dividendInfo.innerHTML += "Next APR: " + next.toFixed(2) + "%";
+    }
+    
+    getBlockCount(baseShares, yourShares)
+    {
+        let result = 0;
+        
+        while(yourShares > 0)
+        {
+            yourShares -= baseShares;
+            baseShares *= 2;
+            
+            if(yourShares >= 0)
+            {
+                result++;
+            }
+        }
+        
+        return result;
+    }
+}
+
 class VaultSharingModule extends BaseModule
 {
     constructor(startTime, myBalance, spouseBalance)
@@ -5168,6 +5454,7 @@ class SettingsModule extends BaseModule
                 if(name == "List_Sorter"){classRef = ListSorterModule}
                 if(name == "Poker_Calculator"){classRef = PokerCalculatorModule}
                 if(name == "Power_Level"){classRef = PowerLevelModule}
+                if(name == "Stock_Market"){classRef = StockMarketModule}
                 if(name == "Vault_Sharing"){classRef = VaultSharingModule}
                 
                 if(classRef)
@@ -5567,6 +5854,30 @@ class SettingsModule extends BaseModule
                     settingsHidden: true, 
                     settings: {}
                 },
+                Stock_Market:
+                {
+                    isActive: false, 
+                    needsApiKey: true, 
+                    description: "This allows you to sort and group the list of stocks, it also shows APR (Annual Percentage Rate) of most stocks that give dividends.", 
+                    settingsHidden: true, 
+                    settings:
+                    {
+                        Group_by:
+                        {
+                            value: "Type then owned", 
+                            valueType: "list",
+                            possibleValues: ["None", "Owned", "Type", "Owned then type", "Type then owned"],
+                            description: "Groups the stocks by bought/unbought and/or block benefit type"
+                        }, 
+                        Order_by:
+                        {
+                            value: "None", 
+                            valueType: "list", 
+                            possibleValues: ["None", "Block value (ascending)", "Block value (descending)"], 
+                            description: "Sorts the stocks (within each group)"
+                        }
+                    }
+                }, 
                 Vault_Sharing:
                 {
                     isActive: false, 
@@ -5687,7 +5998,7 @@ class SettingsModule extends BaseModule
         #SettingsModule tr.module ~ tr
         {
             /*background-color: #CCC;*/
-            background-color: var(--default-gray-c-color);
+            background-color: var(--default-bg-panel-color);
         }
         
         #SettingsModule .hidden
