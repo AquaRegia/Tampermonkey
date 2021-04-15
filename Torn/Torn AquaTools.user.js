@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.0
+// @version      2.3.1
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -5003,6 +5003,8 @@ class StockMarketModule extends BaseModule
             "of Medical Supplies": {id: 365, value: 0}
         };
         
+        this.purchasePrices = {};
+        
         this.ready();
     }
     
@@ -5010,6 +5012,20 @@ class StockMarketModule extends BaseModule
     {
         this.addAjaxListener("StockMarket&step=getInitialData", false, json => 
         {
+            for(let stock of json.stocks)
+            {
+                let price = 0;
+                let amount = 0;
+                
+                for(let transaction of stock.userOwned.transactions)
+                {
+                    price += transaction.amount * transaction.boughtPrice;
+                    amount += transaction.amount;
+                }
+                
+                this.purchasePrices[stock.profile.name] = {price: price, amount: amount};
+            }
+            
             if(this.sortByValue)
             {
                 let sorter = (a, b) => (b.dividends.requirements.forOne * b.sharesPrice.chartData.slice(-1)[0].value) - (a.dividends.requirements.forOne * a.sharesPrice.chartData.slice(-1)[0].value);
@@ -5125,6 +5141,7 @@ class StockMarketModule extends BaseModule
         });
         
         this.hijackDividendTab();
+        this.updateProfit();
     }
     
     async getAverageItemCost(id)
@@ -5199,7 +5216,7 @@ class StockMarketModule extends BaseModule
                 this.updateDividendInfo(type);
             }
         }
-        
+
         setTimeout(this.hijackDividendTab.bind(this, currentPrice), 200);
     }
     
@@ -5246,6 +5263,35 @@ class StockMarketModule extends BaseModule
         dividendInfo.innerHTML = "Base APR: " + base.toFixed(2) + "%<br/>";
         dividendInfo.innerHTML += "Your APR: " + your.toFixed(2) + "%<br/>";
         dividendInfo.innerHTML += "Next APR: " + next.toFixed(2) + "%";
+    }
+    
+    async updateProfit()
+    {
+        for(let [stockName, stockData] of Object.entries(this.purchasePrices))
+        {
+            let stockBaseElement = document.querySelector("li[aria-label=\"Stock: " + stockName + "\"]").parentNode;
+            
+            let currentValue = parseFloat(stockBaseElement.querySelector("#PriceTab").ariaLabel.split(" ").slice(-1)[0].slice(1));
+            
+            let managerTab = stockBaseElement.querySelector("#ManagerTab");
+            let paragraphs = managerTab.querySelectorAll("p");
+            
+            if(paragraphs.length > 2)
+            {
+                Array.from(paragraphs).slice(-1)[0].remove();
+            }
+            
+            let difference = this.purchasePrices[stockName].amount * currentValue - this.purchasePrices[stockName].price;
+            let color = difference < 0 ? "var(--stockmarket-red-color)" : "var(--stockmarket-green-color)";
+            
+            managerTab.innerHTML += `
+            
+            <p style='color: ${color}'>$${difference.toLocaleString()}</p>
+            
+            `;
+        }
+        
+        setTimeout(this.updateProfit.bind(this), 200);
     }
     
     getBlockCount(baseShares, yourShares)
