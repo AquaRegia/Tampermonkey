@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.1
+// @version      2.3.2
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -5010,6 +5010,21 @@ class StockMarketModule extends BaseModule
     
     init()
     {
+        (function(original)
+        {
+            Array.prototype.sort = function()
+            {
+                if(this.length > 25 && String(arguments[0]).includes("criteria"))
+                {
+                    return this;
+                }
+                else
+                {
+                    return original.apply(this, arguments);
+                }
+            }
+        }(Array.prototype.sort));
+        
         this.addAjaxListener("StockMarket&step=getInitialData", false, json => 
         {
             for(let stock of json.stocks)
