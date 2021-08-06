@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.2
+// @version      2.3.3
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -3273,7 +3273,7 @@ class CityFindsModule extends BaseModule
             padding: 5px;
         }
 
-        #cityFindTable thead
+        #cityFindTable thead, #cityFindTable tfoot
         {
             cursor: pointer;
         }
@@ -3303,7 +3303,7 @@ class CityFindsModule extends BaseModule
             {
                 if(!e.hasAttribute("colspan"))
                 {
-                    let currentWidth = getComputedStyle(e).width.replace(/[^0-9]/g, "");
+                    let currentWidth = getComputedStyle(e).width.replace(/[^0-9\.]/g, "");
                     max = currentWidth > max ? currentWidth : max;
                 }
             });
