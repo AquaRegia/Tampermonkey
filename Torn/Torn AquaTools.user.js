@@ -3904,6 +3904,7 @@ class EntityFilterModule extends BaseModule
                 await Utils.sleep(100);
             }
             
+            travelButtons.forEach(e => e.disabled = true);
             travelButtons.forEach(e => e.innerHTML = "OC");
         }
     }
