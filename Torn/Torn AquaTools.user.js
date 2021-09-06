@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.3
+// @version      2.3.4
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -3729,7 +3729,7 @@ class EloCalculatorModule extends BaseModule
 
 class EntityFilterModule extends BaseModule
 {
-    constructor(crimeSelection, gymStatSelection, factionWallsToHide)
+    constructor(crimeSelection, gymStatSelection, factionWallsToHide, hideTravelTime)
     {
         super("");
         
@@ -3737,24 +3737,36 @@ class EntityFilterModule extends BaseModule
         this.crimeSelection = crimeSelection;
         this.gymStatSelection = gymStatSelection;
         this.factionWallsToHide = factionWallsToHide;
+        this.hideTravelTime = hideTravelTime;
         
         this.ready();
     }
     
     init()
-    {     
-        if(this.location.includes("/crimes.php"))
+    {
+        this.addAjaxListener("getSidebarData", false, json => 
         {
-            this.hideCrimes();
-        }
-        else if(this.location.includes("/gym.php"))
-        {
-            this.hideGymStats();
-        }
-        else if(this.location.includes("/factions.php?step=your"))
-        {
-            this.hideWalls();
-        }
+            this.oc = json.statusIcons.icons.organized_crime;
+            
+            if(this.location.includes("/crimes.php"))
+            {
+                this.hideCrimes();
+            }
+            else if(this.location.includes("/gym.php"))
+            {
+                this.hideGymStats();
+            }
+            else if(this.location.includes("/factions.php?step=your"))
+            {
+                this.hideWalls();
+            }
+            else if(this.location.includes("/travelagency.php"))
+            {
+                this.hideTravel();
+            }
+            
+            return json;
+        });
     }
     
     hideCrimes()
@@ -3864,6 +3876,35 @@ class EntityFilterModule extends BaseModule
                 
                 return json;
             });
+        }
+    }
+    
+    async hideTravel()
+    {
+        if(this.oc && this.hideTravelTime > 0 && (this.oc.timerExpiresAt - this.oc.serverTimestamp) <= (this.hideTravelTime*60))
+        {
+            GM_addStyle(`
+                .travel-info-btn
+                {
+                    pointer-events: none;
+                }
+            `);
+
+            let travelButtons;
+            
+            while(true)
+            {
+                travelButtons = document.querySelectorAll(".travel-info-btn button");
+                
+                if(travelButtons.length > 0)
+                {
+                    break;
+                }
+                
+                await Utils.sleep(100);
+            }
+            
+            travelButtons.forEach(e => e.innerHTML = "OC");
         }
     }
 }
@@ -5855,6 +5896,12 @@ class SettingsModule extends BaseModule
                             value: "", 
                             valueType: "text", 
                             description: "This should be a comma-separated string of faction IDs whose walls you don't want to show on your own faction page"
+                        }, 
+                        Hide_travel:
+                        {
+                            value: 0, 
+                            valueType: "number", 
+                            description: "If this is greater than 0, it will restrict travel by disabling the travel button if you're this many minutes (or less) from being ready for an organized crime"
                         }
                     }
                 },
