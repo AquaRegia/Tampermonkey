@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.4
+// @version      2.3.5
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -2381,14 +2381,14 @@ class BazaarSorterModule extends BaseModule
 
 class ChainTargetsModule extends BaseModule
 {
-    constructor(maxOkay, maxBusy, avoidOnlineTargets)
+    constructor(maxOkay, maxBusy, onlineTargetPriority)
     {
         super("/blacklist.php?page=ChainTargets");
         this.loadTargets();
         
         this.maxOkay = maxOkay;
         this.maxBusy = maxBusy;
-        this.avoidOnlineTargets = avoidOnlineTargets == "true";
+        this.onlineTargetPriority = onlineTargetPriority;
         
         this.addAjaxListener("getSidebarData", false, (json) => 
         {
@@ -2549,15 +2549,17 @@ class ChainTargetsModule extends BaseModule
         if(!a){return 1;}
         if(!b){return -1;}
         
-        if(!ignoreSettings && this.avoidOnlineTargets)
+        if(!ignoreSettings && this.onlineTargetPriority != "Neutral")
         {
+            let flip = this.onlineTargetPriority == "Higher" ? -1 : 1;
+            
             if(a.lastAction.status == "Offline" && b.lastAction.status != "Offline")
             {
-                return -1;
+                return -1 * flip;
             }
             else if(a.lastAction.status != "Offline" && b.lastAction.status == "Offline")
             {
-                return 1;
+                return 1 * flip;
             }
         }
     
@@ -2683,7 +2685,7 @@ class ChainTargetsModule extends BaseModule
                 nextTarget = this.unknownTargets[0];
             }
             //If the best online target in unknown is better than the last target in idle, pick it if it's older than 15 minutes
-            else if(this.avoidOnlineTargets && oldOnlineTargets.length > 0 && this.compareTargets(lastTargetInIdle, oldOnlineTargets[0], true) > 0)
+            else if(this.onlineTargetPriority == "Lower" && oldOnlineTargets.length > 0 && this.compareTargets(lastTargetInIdle, oldOnlineTargets[0], true) > 0)
             {
                 nextTarget = oldOnlineTargets[0];
             }
@@ -5466,6 +5468,7 @@ class SettingsModule extends BaseModule
         this.modules = [];
         
         this.svgString = window.btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#ff5d22" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>`);
+        this.removedSettingNames = ["Avoid_online_targets"];
         
         GM_addStyle(`
         ul[class^='status-icons___'] li:first-child#icon1-sidebar
@@ -5687,11 +5690,12 @@ class SettingsModule extends BaseModule
                             valueType: "number", 
                             description: "Limits the number of targets in the waiting list, a lower limit means more frequent updates for the top list"
                         }, 
-                        Avoid_online_targets:
+                        Online_target_priority:
                         {
-                            value: "true", 
-                            valueType: "boolean", 
-                            description: "Lower the priority of targets that are online or idle, and only add them to the top list if there are no offline targets available"
+                            value: "Neutral", 
+                            valueType: "list", 
+                            possibleValues: ["Higher", "Neutral", "Lower"], 
+                            description: "The priority of targets that are online or idle, higher/lower will override the usual sort order, while neutral will sort as usual regardless of online status"
                         }
                     }
                 },
@@ -6043,7 +6047,11 @@ class SettingsModule extends BaseModule
                 
                 for(let [settingName, setting] of Object.entries(module.settings))
                 {
-                    if(settingsTemplate.modules[name].settings[settingName])
+                    if(this.removedSettingNames.includes(settingName))
+                    {
+                        continue;
+                    }
+                    else if(settingsTemplate.modules[name].settings[settingName])
                     {
                         setting.description = settingsTemplate.modules[name].settings[settingName].description;
                         if(setting.hasOwnProperty("possibleValues"))
@@ -6222,6 +6230,11 @@ class SettingsModule extends BaseModule
                 html += "<ul>";
                 for(let [settingName, setting] of Object.entries(module.settings))
                 {
+                    if(this.removedSettingNames.includes(settingName))
+                    {
+                        continue;
+                    }
+                    
                     html += `<li title="${setting.description}" class="${settingName}">`;
                     
                     if(setting.valueType == "number")
