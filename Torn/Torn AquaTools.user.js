@@ -2385,7 +2385,7 @@ class ChainTargetsModule extends BaseModule
     {
         super("/blacklist.php?page=ChainTargets");
         this.loadTargets();
-        
+
         this.maxOkay = maxOkay;
         this.maxBusy = maxBusy;
         this.onlineTargetPriority = onlineTargetPriority;
@@ -6049,7 +6049,7 @@ class SettingsModule extends BaseModule
                 {
                     if(this.removedSettingNames.includes(settingName))
                     {
-                        continue;
+                        delete module.settings[settingName];
                     }
                     else if(settingsTemplate.modules[name].settings[settingName])
                     {
@@ -6230,11 +6230,6 @@ class SettingsModule extends BaseModule
                 html += "<ul>";
                 for(let [settingName, setting] of Object.entries(module.settings))
                 {
-                    if(this.removedSettingNames.includes(settingName))
-                    {
-                        continue;
-                    }
-                    
                     html += `<li title="${setting.description}" class="${settingName}">`;
                     
                     if(setting.valueType == "number")
