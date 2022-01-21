@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.5
+// @version      2.3.6
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -5471,7 +5471,7 @@ class SettingsModule extends BaseModule
         this.removedSettingNames = ["Avoid_online_targets"];
         
         GM_addStyle(`
-        ul[class^='status-icons___'] li:first-child#icon1-sidebar
+        ul[class^='status-icons___'] li:first-child
         {
             background-image: url("data:image/svg+xml;base64,${this.svgString}");
         }
