@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.6
+// @version      2.3.7
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
 // @updateURL    https://github.com/AquaRegia/Tampermonkey/raw/main/Torn/Torn%20AquaTools.user.js
 // @downloadURL  https://github.com/AquaRegia/Tampermonkey/raw/main/Torn/Torn%20AquaTools.user.js
-// @run-at       document-start
+// @run-at       document-body
 // @grant        none
 // ==/UserScript==
 
