@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.7
+// @version      2.3.8
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -2397,7 +2397,7 @@ class ChainTargetsModule extends BaseModule
                 added: null, 
                 favorite: null, 
                 icon: "factions", 
-                link: "blacklist.php?page=ChainTargets", 
+                link: "/blacklist.php?page=ChainTargets", 
                 linkOrder: 23, 
                 name: "Chains", 
                 status: null, 
