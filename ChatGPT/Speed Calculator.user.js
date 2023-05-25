@@ -16,7 +16,7 @@ async function sleep(ms)
 
 function addComment(text)
 {
-    let allMessages = document.querySelectorAll("main div.items-center.flex-col .text-base");
+    let allMessages = document.querySelectorAll("main div.group .text-base");
     let lastMessage = allMessages[allMessages.length - 1];
 
     let newDiv = document.createElement("div");
