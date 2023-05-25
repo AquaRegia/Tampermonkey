@@ -77,6 +77,7 @@ function addComment(text)
                     try
                     {
                         let json = JSON.parse(rawJson);
+                        console.log(json);
 
                         if(json.message.end_turn)
                         {
