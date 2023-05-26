@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT Speed Calculator
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  Displays how fast a message was generated
 // @author       AquaRegia
 // @match        https://chat.openai.com/*
@@ -43,6 +43,7 @@ function addComment(text)
                 let gotToTheEnd = false;
 
                 let reader = response.clone().body.getReader();
+                let startTime = Date.now()/1000;
 
                 while(true)
                 {
@@ -81,7 +82,7 @@ function addComment(text)
 
                         if(json.message.end_turn)
                         {
-                            let time = Date.now()/1000 - json.message.create_time;
+                            let time = Date.now()/1000 - startTime;//json.message.create_time;
                             let bytes = json.message.content.parts[0].length;
 
                             if(bytes == 0)
