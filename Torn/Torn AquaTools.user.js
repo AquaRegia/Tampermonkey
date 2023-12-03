@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.8
+// @version      2.4.0
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -5389,6 +5389,13 @@ class VaultSharingModule extends BaseModule
     
     async init()
     {
+        this.addAjaxListener("getSidebarData", false, json =>
+        {
+            this.name = json.user.name;
+
+            return json;
+        });
+        
         let transactions;
 
         while((transactions = document.querySelectorAll("li[transaction_id]")).length == 0)
@@ -5430,6 +5437,11 @@ class VaultSharingModule extends BaseModule
         setTimeout(this.init.bind(this), 500);
     }
 
+    formatBalance(balance)
+    {
+        return (balance < 0 ? "-" : "") + "$" + Math.abs(balance).toLocaleString();
+    }
+
     calculateBalances()
     {
         let balances = {};
@@ -5448,8 +5460,25 @@ class VaultSharingModule extends BaseModule
             
             transactionElement.style.color = "var(--default-blue-color";
             transactionElement.title = "Total: $" + originalBalance.toLocaleString();
-            transactionElement.innerHTML = (balances[transaction.name] < 0 ? "-" : "") + "$" + Math.abs(balances[transaction.name]).toLocaleString();
+            transactionElement.innerHTML = this.formatBalance(balances[transaction.name]);
         }
+        let currentBalanceDiv = this.findOrCreateCurrentBalanceDiv();
+        currentBalanceDiv.innerText = `Current balance: ${this.formatBalance(balances[this.name])}`;
+    }
+
+    findOrCreateCurrentBalanceDiv()
+    {
+        let currentBalanceDiv = document.querySelector("#currentBalance");
+        if (currentBalanceDiv === null)
+        {
+            let transactionDiv = document.querySelector(".vault-trans-wrap");
+            currentBalanceDiv = document.createElement("div");
+            currentBalanceDiv.id = "currentBalance";
+            currentBalanceDiv.classList.add('title-black');
+            currentBalanceDiv.classList.add('top-round');
+            transactionDiv.prepend(currentBalanceDiv);
+        }
+        return currentBalanceDiv;
     }
     
     onUserLoaded()
