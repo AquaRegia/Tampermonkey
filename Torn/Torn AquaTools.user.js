@@ -151,7 +151,7 @@ class AjaxModule
             {
                 let url = arguments[0];
                 
-				if(!url.includes("bhc"))
+				if(!url.includes("page.php?sid=bhc"))
 				{
 					let preCall = base._runAjaxCallbacks(url, true);
 					if(preCall){return new Response(JSON.stringify(preCall))};
