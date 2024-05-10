@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn AquaTools
 // @namespace
-// @version      2.3.8
+// @version      2.3.9
 // @description
 // @author       AquaRegia
 // @match        https://www.torn.com/*
@@ -151,16 +151,24 @@ class AjaxModule
             {
                 let url = arguments[0];
                 
-                let preCall = base._runAjaxCallbacks(url, true);
-                if(preCall){return new Response(JSON.stringify(preCall))};
-                
-                let result = await original.apply(this, arguments);
-                let json = await result.clone().json();
-                
-                let stub = base._runAjaxCallbacks(url, false, json);
+				if(!url.includes("bhc"))
+				{
+					let preCall = base._runAjaxCallbacks(url, true);
+					if(preCall){return new Response(JSON.stringify(preCall))};
+					
+					let result = await original.apply(this, arguments);
+					let json = await result.clone().json();
+					
+					let stub = base._runAjaxCallbacks(url, false, json);
 
-                //console.log("Fetch:", url, json);
-                return stub ? new Response(JSON.stringify(stub)) : result;
+					//console.log("Fetch:", url, json);
+					return stub ? new Response(JSON.stringify(stub)) : result;
+				}
+				else
+				{
+					console.log("What is this??? " + url);
+					return await original.apply(this, arguments);
+				}
             };
         })(window.fetch);
     }
